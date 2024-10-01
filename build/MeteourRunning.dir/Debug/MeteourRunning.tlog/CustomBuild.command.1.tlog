@@ -1,0 +1,10 @@
+^C:\USERS\LUCAS\PROGRAMS\CPPPROGRAMS\CG\METEOUR_RUNNING\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/lucas/programs/CPPPrograms/CG/meteour_running -BC:/Users/lucas/programs/CPPPrograms/CG/meteour_running/build --check-stamp-file C:/Users/lucas/programs/CPPPrograms/CG/meteour_running/build/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

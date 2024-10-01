@@ -1,0 +1,17 @@
+{
+    "configurations": [
+      {
+        "name": "Win32",
+        "includePath": [
+          "${workspaceFolder}/**",
+          "C:/msys64/mingw64/include/**"  // Inclui diretórios do vcpkg
+        ],
+        "defines": [],
+        "compilerPath": "C:/msys64/mingw64/bin/clang++.exe",  // Caminho para o compilador
+        "cStandard": "c11",
+        "cppStandard": "c++17",
+        "intelliSenseMode": "clang-x64"
+      }
+    ],
+    "version": 4
+  }

@@ -1,0 +1,29 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "C/C++: clang++.exe build active file",
+        "type": "shell",
+        "command": "C:/msys64/mingw64/bin/clang++.exe",  // Caminho para o clang++
+        "args": [
+          "-g",  // Inclui informações de depuração
+          "src/main.cpp",  // Arquivo principal
+          "src/ObjLoader.cpp",  // Outros arquivos necessários
+          "-o",
+          "${workspaceFolder}/build/main.exe",  // O executável gerado
+          "-I", "C:/msys64/mingw64/include",  // Incluir diretórios
+          "-L", "C:/msys64/mingw64/lib",  // Diretórios de bibliotecas
+          "-lfreeglut",  // Linkar com a biblioteca FreeGLUT
+          "-lopengl32",  // Linkar com OpenGL
+          "-lglu32"  // Linkar com a biblioteca GLU
+        ],
+        "group": {
+          "kind": "build",
+          "isDefault": true
+        },
+        "problemMatcher": ["$gcc"],
+        "detail": "Tarefa gerada pelo C/C++ extension."
+      }
+    ]
+  }
+  
