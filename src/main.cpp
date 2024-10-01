@@ -26,7 +26,7 @@ GLuint pisoTexture; // ID da textura do piso
 void LoadTexture(const char* filename) {
     int width, height, channels;
     unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
-    
+
     if (!data) {
         std::cerr << "Erro ao carregar a textura: " << stbi_failure_reason() << std::endl;
         return;
@@ -39,7 +39,7 @@ void LoadTexture(const char* filename) {
             rgbaData[i * 4 + 0] = data[i * 3 + 0]; // R
             rgbaData[i * 4 + 1] = data[i * 3 + 1]; // G
             rgbaData[i * 4 + 2] = data[i * 3 + 2]; // B
-            rgbaData[i * 4 + 3] = 255;              // A
+            rgbaData[i * 4 + 3] = 255;             // A
         }
 
         glGenTextures(1, &pisoTexture);
@@ -66,26 +66,38 @@ void LoadTexture(const char* filename) {
     stbi_image_free(data); // Liberar memória do data original
 }
 
+
 void AtualizaCamera() {
-    camera.posX = objX;
-    camera.posY = cameraHeight;
-    camera.posZ = objZ - cameraDistance;
+    // Calcular a nova posição da câmera
+    GLfloat targetX = objX;
+    GLfloat targetZ = objZ - cameraDistance;
+
+    camera.posX += (targetX - camera.posX) * 0.1; // Lerp suave para o alvo
+    camera.posY = cameraHeight; // Mantém a altura fixa
+    camera.posZ += (targetZ - camera.posZ) * 0.1; // Lerp suave para o alvo
+
+    // Limitar a altura da câmera
+    if (camera.posY < 1.0) {
+        camera.posY = 1.0;
+    }
+
     camera.apply();
 }
+
 
 void Teclado(unsigned char key, int x, int y) {
     switch (key) {
         case 'w':
-            dz -= 0.1;
+            objZ -= 0.1;
             break;
         case 's':
-            dz += 0.1;
+            objZ += 0.1;
             break;
         case 'a':
-            dx -= 0.1;
+            objX -= 0.1;
             break;
         case 'd':
-            dx += 0.1;
+            objX += 0.1;
             break;
         case 'i':
             camera.move(0.0, 0.0, 0.1);
@@ -94,7 +106,6 @@ void Teclado(unsigned char key, int x, int y) {
             camera.move(0.0, 0.0, -0.1);
             break;
     }
-    AtualizaCamera();
     glutPostRedisplay();
 }
 
@@ -105,9 +116,11 @@ void Inicializa(void) {
     glEnable(GL_LIGHT0);
     glEnable(GL_DEPTH_TEST);
 
+
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(65, 1, 0.5, 500);
+
 
     LoadTexture("assets/textura_piso.jpg"); // Carrega a textura do piso
 }
@@ -147,13 +160,16 @@ void ObjWireFrame(void) {
 }
 
 void Desenha(void) {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpa os buffers
 
     Piso(1.0, -4.0); // Desenha o piso
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    camera.apply();
+    
+    // A câmera é aplicada antes de desenhar o objeto
+    AtualizaCamera();
+    camera.apply(); // Aplique as transformações da câmera
 
     glColor3f(1.0, 0.0, 1.0);
     glPushMatrix();
@@ -162,7 +178,8 @@ void Desenha(void) {
     ObjWireFrame();
     glPopMatrix();
 
-    glutSwapBuffers();
+    glutSwapBuffers(); // Troca os buffers
+    glFlush(); // Garante que todas as operações estão completas
 }
 
 int main(int argc, char** argv) {
