@@ -5,17 +5,17 @@
         "label": "C/C++: clang++.exe build active file",
         "type": "shell",
         "command": "C:/msys64/mingw64/bin/clang++.exe",  // Caminho para o clang++
-        "args": [
-          "-g",  // Inclui informações de depuração
-          "src/main.cpp",  // Arquivo principal
-          "src/ObjLoader.cpp",  // Outros arquivos necessários
-          "-o",
-          "${workspaceFolder}/build/main.exe",  // O executável gerado
-          "-I", "C:/msys64/mingw64/include",  // Incluir diretórios
-          "-L", "C:/msys64/mingw64/lib",  // Diretórios de bibliotecas
-          "-lfreeglut",  // Linkar com a biblioteca FreeGLUT
-          "-lopengl32",  // Linkar com OpenGL
-          "-lglu32"  // Linkar com a biblioteca GLU
+       "args": [
+            "-g",  // Inclui informações de depuração
+            "src/main.cpp",  // Arquivo principal
+            "src/ObjLoader.cpp",  // Outros arquivos necessários
+            "-o",
+            "${workspaceFolder}/build/main.exe",  // O executável gerado
+            "-I", "C:/msys64/mingw64/include",  // Incluir diretórios
+            "-L", "C:/msys64/mingw64/lib",  // Diretórios de bibliotecas
+            "-lopengl32",  // Linkar com OpenGL
+            "-lglu32",     // Linkar com a biblioteca GLU
+            "-lfreeglut",  // Linkar com a biblioteca FreeGLUT
         ],
         "group": {
           "kind": "build",
@@ -26,4 +26,3 @@
       }
     ]
   }
-  

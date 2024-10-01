@@ -1,6 +1,12 @@
-#include <GL/glut.h>
+#include <GL/gl.h>         // Para OpenGL
+#include <GL/glu.h>        // Para funções de utilidade OpenGL
+#include <GL/freeglut.h>   // Para FreeGLUT
+
+#define STB_IMAGE_IMPLEMENTATION
+
 #include "ObjLoader.h"
 #include "Camera.h"
+#include "stb_image.h"
 
 using namespace std;
 
@@ -8,46 +14,88 @@ ObjLoader obj;
 
 GLfloat objX = 0.0, objZ = 0.0;
 GLfloat cameraDistance = 5.0; // Distância da câmera em relação ao objeto
-GLfloat cameraHeight = 3.0; // Altura da câmera em relação ao objeto
+GLfloat cameraHeight = 5.0; // Altura da câmera em relação ao objeto
 
-Camera camera(objX, cameraHeight, objZ - cameraDistance);
+Camera camera(objX - cameraDistance, cameraHeight, objZ - cameraDistance);
 
 GLfloat dx = 0.0; // Translação no eixo X do objeto
 GLfloat dz = 0.0; // Translação no eixo Z do objeto
 
-void AtualizaCamera() {
-    // A câmera segue o objeto a uma distância fixa e altura definida
-    camera.posX = objX;  // Câmera segue a posição X do objeto
-    camera.posY = cameraHeight; // Mantém a altura fixa
-    camera.posZ = objZ - cameraDistance; // Mantém a distância fixa no eixo Z
+GLuint pisoTexture; // ID da textura do piso
 
-    // Reorienta a câmera para olhar para o objeto
+void LoadTexture(const char* filename) {
+    int width, height, channels;
+    unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+    
+    if (!data) {
+        std::cerr << "Erro ao carregar a textura: " << stbi_failure_reason() << std::endl;
+        return;
+    }
+
+    // Converte para formato RGBA se necessário
+    if (channels == 3) {
+        unsigned char* rgbaData = new unsigned char[width * height * 4];
+        for (int i = 0; i < width * height; ++i) {
+            rgbaData[i * 4 + 0] = data[i * 3 + 0]; // R
+            rgbaData[i * 4 + 1] = data[i * 3 + 1]; // G
+            rgbaData[i * 4 + 2] = data[i * 3 + 2]; // B
+            rgbaData[i * 4 + 3] = 255;              // A
+        }
+
+        glGenTextures(1, &pisoTexture);
+        glBindTexture(GL_TEXTURE_2D, pisoTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaData);
+
+        // Configura os parâmetros da textura
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        delete[] rgbaData; // Liberar os dados RGBA
+    } else if (channels == 4) {
+        glGenTextures(1, &pisoTexture);
+        glBindTexture(GL_TEXTURE_2D, pisoTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+        // Configura os parâmetros da textura
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    } else {
+        std::cerr << "Formato de imagem não suportado." << std::endl;
+    }
+
+    stbi_image_free(data); // Liberar memória do data original
+}
+
+void AtualizaCamera() {
+    camera.posX = objX;
+    camera.posY = cameraHeight;
+    camera.posZ = objZ - cameraDistance;
     camera.apply();
 }
 
 void Teclado(unsigned char key, int x, int y) {
     switch (key) {
         case 'w':
-            dz -= 0.1; // Move o objeto para frente
+            dz -= 0.1;
             break;
         case 's':
-            dz += 0.1; // Move o objeto para trás
+            dz += 0.1;
             break;
         case 'a':
-            dx -= 0.1; // Move o objeto para a esquerda
+            dx -= 0.1;
             break;
         case 'd':
-            dx += 0.1; // Move o objeto para a direita
+            dx += 0.1;
             break;
         case 'i':
-            camera.move(0.0, 0.0, 0.1); // Move a câmera para frente
+            camera.move(0.0, 0.0, 0.1);
             break;
         case 'k':
-            camera.move(0.0, 0.0, -0.1); // Move a câmera para trás
+            camera.move(0.0, 0.0, -0.1);
             break;
     }
     AtualizaCamera();
-    glutPostRedisplay(); // Requisita redesenho da cena
+    glutPostRedisplay();
 }
 
 void Inicializa(void) {
@@ -60,19 +108,26 @@ void Inicializa(void) {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     gluPerspective(65, 1, 0.5, 500);
+
+    LoadTexture("assets/textura_piso.jpg"); // Carrega a textura do piso
 }
 
 void Piso(float escala, float altura) {
-    glColor3f(0.0, 1.0, 0.0);
     glPushMatrix();
     glTranslatef(0.0, altura, 0.0);
     glScalef(escala, escala, escala);
+
+    glEnable(GL_TEXTURE_2D); // Habilita o uso de texturas
+    glBindTexture(GL_TEXTURE_2D, pisoTexture); // Usa a textura carregada
+
     glBegin(GL_QUADS);
-    glVertex3f(100.0, 0.0, 100.0);
-    glVertex3f(-100.0, 0.0, 100.0);
-    glVertex3f(-100.0, 0.0, -100.0);
-    glVertex3f(100.0, 0.0, -100.0);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(100.0, 0.0, 100.0);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-100.0, 0.0, 100.0);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-100.0, 0.0, -100.0);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(100.0, 0.0, -100.0);
     glEnd();
+
+    glDisable(GL_TEXTURE_2D); // Desabilita o uso de texturas
     glPopMatrix();
 }
 
@@ -98,12 +153,12 @@ void Desenha(void) {
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    camera.apply(); // Aplica as transformações da câmera
+    camera.apply();
 
     glColor3f(1.0, 0.0, 1.0);
     glPushMatrix();
     glScalef(2.0, 2.0, 2.0);
-    glTranslatef(dx, 0.0, dz); // Translação do objeto em X e Z
+    glTranslatef(objX, 0.0, objZ);
     ObjWireFrame();
     glPopMatrix();
 
@@ -113,7 +168,7 @@ void Desenha(void) {
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGB);
-    glutInitWindowSize(800, 800);
+    glutInitWindowSize(1366, 768);
     glutInitWindowPosition(0, 0);
     glutCreateWindow("Meteour Running");
 
@@ -126,5 +181,6 @@ int main(int argc, char** argv) {
     glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
 
     glutMainLoop();
+
     return 0;
 }
