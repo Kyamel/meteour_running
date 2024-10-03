@@ -1,6 +1,8 @@
+#include <iostream>
 #include <GL/gl.h>         // Para OpenGL
 #include <GL/glu.h>        // Para funções de utilidade OpenGL
 #include <GL/freeglut.h>   // Para FreeGLUT
+#include <map>
 
 #define STB_IMAGE_IMPLEMENTATION
 
@@ -12,16 +14,131 @@ using namespace std;
 
 ObjLoader obj;
 
-GLfloat objX = 0.0, objZ = 0.0;
-GLfloat cameraDistance = 5.0; // Distância da câmera em relação ao objeto
-GLfloat cameraHeight = 5.0; // Altura da câmera em relação ao objeto
+GLfloat objX = 0.0, objZ = 0.0, objY = 0.0;
+GLfloat cameraDistance = 5.0;
+GLfloat cameraHeight = 5.0;
+
+GLfloat cameraScale = 1.0;
 
 Camera camera(objX - cameraDistance, cameraHeight, objZ - cameraDistance);
 
-GLfloat dx = 0.0; // Translação no eixo X do objeto
-GLfloat dz = 0.0; // Translação no eixo Z do objeto
-
 GLuint pisoTexture; // ID da textura do piso
+
+map<unsigned char, bool> keyStates;
+
+// Função para printar o estado das teclas
+void PrintKeyStates() {
+    cout << "Key States: " << endl;
+    for (const auto& keyState : keyStates) {
+        cout << keyState.first << ": " << (keyState.second ? "Pressed" : "Released") << endl;
+    }
+    cout << endl;
+}
+
+class Meteour {
+public:
+    GLfloat posX, posY, posZ;
+    GLfloat speed;
+
+    Meteour(GLfloat x, GLfloat y, GLfloat z, GLfloat speed)
+        : posX(x), posY(y), posZ(z), speed(speed) {}
+
+    void update() {
+        posY -= speed; // Meteoro cai no eixo Y
+    }
+
+    bool hasCollided(GLfloat objX, GLfloat objZ, GLfloat objSize) {
+        // Simples verificação de colisão com base nas posições X e Z
+        return (fabs(posX - objX) < objSize && fabs(posZ - objZ) < objSize && posY <= 0.0);
+    }
+};
+
+float velocidadeMovimento = 0.1f;  // Controla a velocidade de movimento para frente/trás
+float velocidadeRotacao = 1.0f;    // Controla a velocidade de rotação
+float velocidadeZoom = 0.1f;
+
+float currentSpeed = 0.1f; // Velocidade atual do movimento para frente
+const float maxSpeed = 0.5f; // Velocidade máxima permitida
+
+void AtualizaMovimento() {
+   if (keyStates['w']) {
+        currentSpeed += 0.001f; // Aumenta a velocidade ao longo do tempo
+        currentSpeed = fmin(currentSpeed, maxSpeed); // V max
+
+        objX += sin((objY) * 3.14 / 180) * currentSpeed;
+        objZ += cos((objY) * 3.14 / 180) * currentSpeed;
+    } else {
+        currentSpeed -= 0.005f; // Aumenta a velocidade ao longo do tempo
+        currentSpeed = fmax(currentSpeed, 0.0); // V max
+
+        objX += sin((objY) * 3.14 / 180) * currentSpeed;
+        objZ += cos((objY) * 3.14 / 180) * currentSpeed;
+    }
+    // mover para trás
+    if (keyStates['s']) {
+        objX -= sin((objY) * 3.14 / 180) * velocidadeMovimento;
+        objZ -= cos((objY) * 3.14 / 180) * velocidadeMovimento;
+    }
+    // girar à esquerda
+    if (keyStates['a']) {
+        objY += velocidadeRotacao;
+    }
+    // girar à direita
+    if (keyStates['d']) {
+        objY -= velocidadeRotacao;
+    }
+
+    // Zoom com 'i' e 'k'
+    if (keyStates['i']) {
+        cameraScale += velocidadeZoom;
+    }
+
+    if (keyStates['k']) {
+        if (cameraScale >= 1.0) {
+            cameraScale -= velocidadeZoom;
+        }
+    }
+
+    glutPostRedisplay();
+}
+
+
+void Teclado(unsigned char key, int x, int y) {
+    keyStates[key] = true;  // Marca a tecla como pressionada
+    AtualizaMovimento();
+}
+
+void TecladoUp(unsigned char key, int x, int y) {
+    keyStates[key] = false; // Marca a tecla como solta
+}
+
+
+void TecladoEspecial(int key, int x, int y) {
+    switch (key) {
+        case GLUT_KEY_LEFT:
+            objY += 5.0;  // Girar o objeto para a esquerda
+            break;
+        case GLUT_KEY_RIGHT:
+            objY -= 5.0;  // Girar o objeto para a direita
+            break;
+    }
+    glutPostRedisplay();
+}
+
+void AtualizaCamera() {
+    GLfloat rad = (objY * 3.14) / 180; // Converter o ângulo para radianos
+
+    // Atualiza a posição da câmera baseada na posição e rotação do objeto
+    camera.posX = objX - cameraDistance * sin(rad) * cameraScale;
+    camera.posZ = objZ - cameraDistance * cos(rad) * cameraScale;
+    camera.posY = cameraHeight * cameraScale;  // Altura fixa da câmera
+
+    // A câmera olha diretamente para o objeto
+    camera.lookAt(objX, 0.0, objZ);
+
+
+}
+
 
 void LoadTexture(const char* filename) {
     int width, height, channels;
@@ -64,49 +181,6 @@ void LoadTexture(const char* filename) {
     }
 
     stbi_image_free(data); // Liberar memória do data original
-}
-
-
-void AtualizaCamera() {
-    // Calcular a nova posição da câmera
-    GLfloat targetX = objX;
-    GLfloat targetZ = objZ - cameraDistance;
-
-    camera.posX += (targetX - camera.posX) * 0.1; // Lerp suave para o alvo
-    camera.posY = cameraHeight; // Mantém a altura fixa
-    camera.posZ += (targetZ - camera.posZ) * 0.1; // Lerp suave para o alvo
-
-    // Limitar a altura da câmera
-    if (camera.posY < 1.0) {
-        camera.posY = 1.0;
-    }
-
-    camera.apply();
-}
-
-
-void Teclado(unsigned char key, int x, int y) {
-    switch (key) {
-        case 'w':
-            objZ -= 0.1;
-            break;
-        case 's':
-            objZ += 0.1;
-            break;
-        case 'a':
-            objX -= 0.1;
-            break;
-        case 'd':
-            objX += 0.1;
-            break;
-        case 'i':
-            camera.move(0.0, 0.0, 0.1);
-            break;
-        case 'k':
-            camera.move(0.0, 0.0, -0.1);
-            break;
-    }
-    glutPostRedisplay();
 }
 
 void Inicializa(void) {
@@ -159,28 +233,33 @@ void ObjWireFrame(void) {
     glPopMatrix();
 }
 
+
+
 void Desenha(void) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpa os buffers
 
-    Piso(1.0, -4.0); // Desenha o piso
+    Piso(1.0, -4.0);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    
-    // A câmera é aplicada antes de desenhar o objeto
+
     AtualizaCamera();
-    camera.apply(); // Aplique as transformações da câmera
+
+      // Chama a função que atualiza o movimento e imprime o estado das teclas
+    AtualizaMovimento();
+
 
     glColor3f(1.0, 0.0, 1.0);
     glPushMatrix();
-    glScalef(2.0, 2.0, 2.0);
-    glTranslatef(objX, 0.0, objZ);
-    ObjWireFrame();
+        glTranslatef(objX, 0.0, objZ);
+        glRotatef(objY, 0.0, 1.0, 0.0);
+        ObjWireFrame();
     glPopMatrix();
 
     glutSwapBuffers(); // Troca os buffers
     glFlush(); // Garante que todas as operações estão completas
 }
+
 
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
@@ -190,12 +269,13 @@ int main(int argc, char** argv) {
     glutCreateWindow("Meteour Running");
 
     Inicializa();
-    obj.load("bonde.obj"); // Carrega o objeto
+        obj.load("bonde.obj"); // Carrega o objeto
 
-    glutDisplayFunc(Desenha);
-    glutKeyboardFunc(Teclado);
-    glutMouseFunc([](int button, int state, int x, int y) { camera.mouseButton(button, state, x, y); });
-    glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
+        glutDisplayFunc(Desenha);
+        glutKeyboardFunc(Teclado);
+        glutKeyboardUpFunc(TecladoUp);
+        glutMouseFunc([](int button, int state, int x, int y) { camera.mouseButton(button, state, x, y); });
+        glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
 
     glutMainLoop();
 
