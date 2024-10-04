@@ -9,7 +9,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 
 #include "ObjLoader.h"
-#include "Camera.h"
+#include "camera.h"
 #include "stb_image.h"
 
 using namespace std;
