@@ -3,6 +3,8 @@
 #include <GL/glu.h>        // Para funções de utilidade OpenGL
 #include <GL/freeglut.h>   // Para FreeGLUT
 #include <map>
+#include <chrono>
+#include <thread>
 
 #define STB_IMAGE_IMPLEMENTATION
 
@@ -11,6 +13,9 @@
 #include "stb_image.h"
 
 using namespace std;
+
+#define WINDOW_WIDTH 1366
+#define WINDOW_HEIGHT 768
 
 ObjLoader obj;
 
@@ -24,16 +29,66 @@ Camera camera(objX - cameraDistance, cameraHeight, objZ - cameraDistance);
 
 GLuint pisoTexture; // ID da textura do piso
 
-map<unsigned char, bool> keyStates;
+class FPSManager {
+private:
+    float fps;
+    int frameCount;
+    float previousTime;
 
-// Função para printar o estado das teclas
-void PrintKeyStates() {
-    cout << "Key States: " << endl;
-    for (const auto& keyState : keyStates) {
-        cout << keyState.first << ": " << (keyState.second ? "Pressed" : "Released") << endl;
+public:
+    FPSManager() : fps(0.0f), frameCount(0), previousTime(0.0f) {}
+
+    // Função para calcular FPS
+    void calculateFPS() {
+        frameCount++;
+        float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;  // Tempo em segundos
+        float deltaTime = currentTime - previousTime;
+
+        if (deltaTime > 1.0f) {
+            fps = frameCount / deltaTime;  // Calcula o FPS
+            frameCount = 0;  // Reseta a contagem de quadros
+            previousTime = currentTime;  // Atualiza o tempo anterior
+        }
     }
-    cout << endl;
-}
+
+    // Função para desenhar texto na tela
+    void drawText(const char *text, float x, float y) {
+
+        glRasterPos2f(x, y);
+
+        while (*text) {
+            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *text);
+            text++;
+        }
+    }
+
+    // Função para exibir o FPS na tela
+    void displayFPS(float x, float y) {
+        char fpsText[32];
+        snprintf(fpsText, sizeof(fpsText), "FPS: %.2f", fps);
+
+        float padding = 5.0f;
+        float textWidth = glutBitmapLength(GLUT_BITMAP_HELVETICA_18, (const unsigned char*)fpsText);
+        float textHeight = 18.0f; // Altura da fonte usada (HELVETICA_18)
+
+        // Desenhar o fundo (um retângulo branco)
+        glColor3f(0.0f, 0.0f, 0.0f); // Cor do fundo: branco
+        glBegin(GL_QUADS);
+            glVertex2f(x - padding, y - padding);
+            glVertex2f(x + textWidth + padding, y - padding);
+            glVertex2f(x + textWidth + padding, y + textHeight + padding);
+            glVertex2f(x - padding, y + textHeight + padding);
+        glEnd();
+
+        // Desenhar o texto por cima do fundo
+        glColor3f(1.0f, 1.0f, 1.0f);
+        glDisable(GL_DEPTH_TEST);
+        drawText(fpsText, x, y + textHeight / 2);
+        glEnable(GL_DEPTH_TEST);
+    }
+};
+
+FPSManager fpsManager;
 
 class Meteour {
 public:
@@ -53,22 +108,24 @@ public:
     }
 };
 
-float velocidadeMovimento = 0.1f;  // Controla a velocidade de movimento para frente/trás
+float velocidadeMovimento = 0.2f;  // Controla a velocidade de movimento para frente/trás
 float velocidadeRotacao = 1.0f;    // Controla a velocidade de rotação
 float velocidadeZoom = 0.1f;
 
 float currentSpeed = 0.1f; // Velocidade atual do movimento para frente
-const float maxSpeed = 0.5f; // Velocidade máxima permitida
+const float maxSpeed = 0.4f; // Velocidade máxima permitida
+
+map<unsigned char, bool> keyStates;
 
 void AtualizaMovimento() {
    if (keyStates['w']) {
-        currentSpeed += 0.001f; // Aumenta a velocidade ao longo do tempo
+        currentSpeed += 0.002f; // Aumenta a velocidade ao longo do tempo
         currentSpeed = fmin(currentSpeed, maxSpeed); // V max
 
         objX += sin((objY) * 3.14 / 180) * currentSpeed;
         objZ += cos((objY) * 3.14 / 180) * currentSpeed;
     } else {
-        currentSpeed -= 0.005f; // Aumenta a velocidade ao longo do tempo
+        currentSpeed -= 0.01f; // Aumenta a velocidade ao longo do tempo
         currentSpeed = fmax(currentSpeed, 0.0); // V max
 
         objX += sin((objY) * 3.14 / 180) * currentSpeed;
@@ -98,8 +155,6 @@ void AtualizaMovimento() {
             cameraScale -= velocidadeZoom;
         }
     }
-
-    glutPostRedisplay();
 }
 
 
@@ -122,7 +177,7 @@ void TecladoEspecial(int key, int x, int y) {
             objY -= 5.0;  // Girar o objeto para a direita
             break;
     }
-    glutPostRedisplay();
+
 }
 
 void AtualizaCamera() {
@@ -135,8 +190,6 @@ void AtualizaCamera() {
 
     // A câmera olha diretamente para o objeto
     camera.lookAt(objX, 0.0, objZ);
-
-
 }
 
 
@@ -233,10 +286,30 @@ void ObjWireFrame(void) {
     glPopMatrix();
 }
 
-
+const int TARGET_FPS = 60;
+const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
 
 void Desenha(void) {
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpa os buffers
+    glEnable(GL_DEPTH_TEST);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();              // Salva a matriz de projeção atual
+    glLoadIdentity();            // Reseta a projeção
+    gluOrtho2D(0, 800, 0, 600);  // Definir projeção ortogonal (ajustar ao tamanho da janela)
+
+    glMatrixMode(GL_MODELVIEW);  // Mudar para a matriz de modelo/visualização
+    glPushMatrix();              // Salva a matriz de visualização
+    glLoadIdentity();            // Reseta a visualização
+
+    fpsManager.calculateFPS();
+    fpsManager.displayFPS(10, 580);
+
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
 
     Piso(1.0, -4.0);
 
@@ -244,10 +317,7 @@ void Desenha(void) {
     glLoadIdentity();
 
     AtualizaCamera();
-
-      // Chama a função que atualiza o movimento e imprime o estado das teclas
     AtualizaMovimento();
-
 
     glColor3f(1.0, 0.0, 1.0);
     glPushMatrix();
@@ -256,15 +326,15 @@ void Desenha(void) {
         ObjWireFrame();
     glPopMatrix();
 
+    glutPostRedisplay();
     glutSwapBuffers(); // Troca os buffers
     glFlush(); // Garante que todas as operações estão completas
 }
 
-
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGB);
-    glutInitWindowSize(1366, 768);
+    glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
     glutInitWindowPosition(0, 0);
     glutCreateWindow("Meteour Running");
 
