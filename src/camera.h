@@ -59,6 +59,23 @@ public:
             }
         }
     }
+
+    void lookAt(float targetX, float targetY, float targetZ) {
+        gluLookAt(
+            posX, posY, posZ,  // Posição da câmera
+            targetX, targetY, targetZ,  // Ponto que a câmera está olhando
+            0.0, 1.0, 0.0   // Vetor "up" para orientar a câmera (normalmente o eixo Y é "up")
+        );
+    }
+
+    void moveCamera(float x, float y, float z, float tx, float ty, float tz){
+        // Subir a câmera modificando o valor de 'y'
+        gluLookAt(
+            x, y, z,  // Posição da câmera (a altura é controlada por 'y')
+            tx, ty, tz,  // Ponto que a câmera está olhando
+            0.0, 1.0, 0.0   // Vetor "up", mantendo o eixo Y como "up"
+        );
+    }
 };
 
 #endif
