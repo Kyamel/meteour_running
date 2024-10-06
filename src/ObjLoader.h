@@ -7,24 +7,34 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <GL/freeglut.h>
 
 class ObjLoader {
 public:
-    // Armazenamento das informações do objeto
-    std::vector<std::vector<GLfloat>> vertices;    // Vértices
-    std::vector<std::vector<GLfloat>> normais;      // Normais
-    std::vector<std::vector<GLfloat>> texturas;     // Texturas
-    std::vector<std::vector<std::vector<GLint>>> faces; // Faces
-
-    // Método para carregar o arquivo OBJ
     bool load(const std::string& filename);
-
-    // Método para renderizar o objeto (exemplo simples)
     void render() const;
+    void setTexture(GLuint texture); // Declaração do método setTexture
+
+    GLfloat x = 0.0, z = 0.0, y = 0.0;
+    float velocidadeMovimento = 0.2f;
+    float velocidadeRotacao = 1.0f;
+    float velocidadeZoom = 0.1f;
+
+    float currentSpeed = 0.1f;
+    const float maxSpeed = 0.4f;
 
 private:
-    // Método auxiliar para processar linhas do arquivo
     void processLine(const std::string& line);
+    
+    std::vector<std::vector<GLfloat>> vertices;
+    std::vector<std::vector<GLfloat>> normais;
+    std::vector<std::vector<GLfloat>> texturas;
+    std::vector<std::vector<std::vector<GLint>>> faces;
+
+    GLuint texture;
+
+
 };
+
 
 #endif // OBJ_DATA_H

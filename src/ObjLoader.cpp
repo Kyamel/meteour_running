@@ -19,14 +19,30 @@ bool ObjLoader::load(const std::string& filename) {
 
 // Método para renderizar o objeto
 void ObjLoader::render() const {
+    // Ativar a textura
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, this->texture);
+
     for (const auto& face : faces) {
-        glBegin(GL_POLYGON);
+        glBegin(GL_POLYGON); // ou GL_TRIANGLES se necessário
+
         for (const auto& vertexIndex : face) {
+            // Aplica a normal, se disponível
+            if (vertexIndex.size() > 2 && vertexIndex[2] >= 0) {
+                glNormal3fv(&normais[vertexIndex[2]][0]);
+            }
+            // Aplica a coordenada de textura, se disponível
+            if (vertexIndex.size() > 1 && vertexIndex[1] >= 0) {
+                glTexCoord2fv(&texturas[vertexIndex[1]][0]);
+            }
+            // Renderiza o vértice
             glVertex3fv(&vertices[vertexIndex[0]][0]);
         }
         glEnd();
     }
+    glDisable(GL_TEXTURE_2D); // Desativa a textura após renderizar
 }
+
 
 // Método auxiliar para processar linhas do arquivo
 void ObjLoader::processLine(const std::string& line) {
@@ -66,4 +82,8 @@ void ObjLoader::processLine(const std::string& line) {
         }
         faces.push_back(face);
     }
+}
+
+void ObjLoader::setTexture(GLuint texture){
+    this->texture = texture;
 }
