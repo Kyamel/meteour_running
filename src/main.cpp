@@ -155,7 +155,7 @@ void AtualizaMovimento() {
     // mover para trás
     if (keyStates['s']) {
         obj.x -= sin((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
-        obj.y -= cos((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
+        obj.z -= cos((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
     }
     // girar à esquerda
     if (keyStates['a']) {
@@ -231,7 +231,7 @@ void Inicializa(void) {
     gluPerspective(65, 1, 0.5, 500);
 }
 
-class Piso{
+class Piso {
 
     private:
         float escala = 1.0;
@@ -267,6 +267,39 @@ class Piso{
         }
 };
 
+class Lighting {
+public:
+    GLfloat globalAmbient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
+    GLfloat light_ambient[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // Luz ambiente
+    GLfloat light_diffuse[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // Luz difusa
+    GLfloat light_position[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // Posição da luz
+
+
+    Lighting() {
+        // Habilita a iluminação
+        glEnable(GL_LIGHTING);
+
+        // Habilita a luz 0
+        glEnable(GL_LIGHT0);
+
+        // Define a luz ambiente global
+        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
+
+        // Define as propriedades da luz
+        glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient);
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);
+        glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+    }
+    void reshape(int width, int height) {
+        if (height == 0) height = 1;
+        glViewport(0, 0, width, height);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        gluPerspective(45.0, (float)width / (float)height, 0.1, 100.0);
+        glMatrixMode(GL_MODELVIEW);
+    }
+};
+
 auto piso = Piso(1.0, -4.0);
 
 const int TARGET_FPS = 60;
@@ -282,11 +315,11 @@ public:
         : posX(x), posY(y), posZ(z), speed(speed), radius(radius) {}
 
     void update() {
-        if (posY > 0){
+        if (posY > 0.0f){
             posY -= speed; // Meteoro cai no eixo Y
         }
         else{
-            posY = 100.0f;
+            posY = 1000.0f;
             float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * 3.14;
             float distance = 10.0f + static_cast<float>(rand()) / RAND_MAX * 50.0f;
             posX = obj.x + distance * cos(angle);
@@ -322,12 +355,13 @@ void spawnMeteors(int count) {
         GLfloat meteorSpeed = 0.001f + static_cast<float>(rand()) / RAND_MAX;
         double meteorRadius = 1.0 + static_cast<double>(rand()) / RAND_MAX * 2.0; // Raio entre 1 e 3
 
-        meteous.push_back(Meteour(meteorX, 100.0f, meteorZ, meteorSpeed, meteorRadius)); // Meteoro começa no Y = 10
+        meteous.push_back(Meteour(meteorX, 1000.0f, meteorZ, meteorSpeed, meteorRadius)); // Meteoro começa no Y = 10
     }
 }
 
 // Função que atualiza e desenha os meteoros
 void updateAndDrawMeteors() {
+    std::cout << "Quantidade de meteoros: " << meteous.size() << std::endl;
     for (int i = 0; i < meteous.size(); ++i) {
         meteous[i].update();
 
@@ -338,9 +372,16 @@ void updateAndDrawMeteors() {
             --i;
             continue;
         }
+        if(meteous[i].posY < 0.0){
+            meteous.erase(meteous.begin() + i);
+            --i;
+            continue;
+        }
         meteous[i].draw();
     }
 }
+
+Lighting light = Lighting();
 
 Meteour met = Meteour(0.0f, 100.0f, 0.0f, 0.5f, 2.0);
 
@@ -392,7 +433,11 @@ void Desenha() {
 
     glutPostRedisplay();
     glutSwapBuffers(); // Troca os buffers
-    glFlush(); // Garante que todas as operações estão completas
+    //glFlush(); // Garante que todas as operações estão completas
+}
+
+void reshape(int width, int height) {
+    light.reshape(width, height); // Chama o método de reshape da luz
 }
 
 int main(int argc, char** argv) {
@@ -408,10 +453,6 @@ int main(int argc, char** argv) {
 
     spawnMeteors(10);
 
-    std::cout << textureObj << std::endl;
-    std::cout << texturePiso << std::endl;
-
-
     Inicializa();
     obj.load("bonde.obj");
     obj.setTexture(textureObj);
@@ -421,6 +462,7 @@ int main(int argc, char** argv) {
         glutDisplayFunc(Desenha);
         glutKeyboardFunc(Teclado);
         glutKeyboardUpFunc(TecladoUp);
+       // glutReshapeFunc(reshape);
         glutMouseFunc([](int button, int state, int x, int y) { camera.mouseButton(button, state, x, y); });
         glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
 
