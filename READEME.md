@@ -12,3 +12,4 @@ Este projeto foi desenvolvido como parte da disciplina de Computação Gráfica 
 ## Dependências
 OpenGL 1.0
 freeglut
+stb_image
