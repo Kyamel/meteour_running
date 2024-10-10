@@ -301,7 +301,7 @@ void drawLighting() {
     glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);    // Define o brilho do material
 }
 
-void Inicializa(void) {
+void glInit(void) {
     GLint texturePiso, textureObj;
 
     glClearColor(1.0, 1.0, 1.0, 0.0); // fundo branco
@@ -643,4 +643,3 @@ void updateAndDrawMeteors() {
     GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
     renderBitmapString(-0.9f, 0.9f, GLUT_BITMAP_HELVETICA_18, buffer);
 }
-
