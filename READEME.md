@@ -1,3 +1,14 @@
-** Trabalho de Comnmpuatação Gráfica, UFOP **
+# Trabalho de Computação Gráfica
 
-Lucas dos Anjos Camelo e Géssica
+**UFOP**
+
+### Autores
+- Lucas dos Anjos Camelo
+- Géssica
+
+## Descrição do Projeto
+Este projeto foi desenvolvido como parte da disciplina de Computação Gráfica na Universidade Federal de Ouro Preto (UFOP).
+
+## Dependências
+OpenGL 1.0
+freeglut
