@@ -223,6 +223,8 @@ public:
     GLfloat posX, posY, posZ;
     GLfloat speed;
     double radius;
+    bool hasCollidedBefore = false;
+    float cooldown;
 
     Meteour(GLfloat x, GLfloat y, GLfloat z, GLfloat speed, double radius)
         : posX(x), posY(y), posZ(z), speed(speed), radius(radius) {}
@@ -384,17 +386,15 @@ Meteour met = Meteour(0.0f, 100.0f, 0.0f, 0.5f, 2.0);
 Skybox skybox = Skybox();
 std::vector<Meteour> meteous;
 FPSManager fpsManager;
+
 auto piso = Piso(1.0, -0.0);
 const int TARGET_FPS = 60;
 const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
 
 map<unsigned char, bool> keyStates;
-bool isCPressed = false;
 int mouseX = 0, mouseY = 0;
 
-float cameraAngleX = 0.0f; // Angulo de pitch
-float cameraAngleY = 0.0f; // Angulo de yaw
-bool followObject = false;
+int hits = 0;
 
 // ----------------------------------------------------------------------------
 // Gerenciar Eventos e Desenhar
@@ -449,8 +449,8 @@ int main(int argc, char** argv) {
         glutKeyboardFunc(Teclado);
         glutKeyboardUpFunc(TecladoUp);
         // glutReshapeFunc(reshape);
-        glutMotionFunc(mouseMovement);
-        glutMouseFunc(mouseButton);
+        glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
+        glutMouseFunc([](int button, int state, int x, int y) { camera.mouseButton(button, state, x, y); });
         glutTimerFunc(1000/60, idle, 0);
         glutMainLoop();
 
@@ -515,37 +515,6 @@ void Desenha() {
 
     glutPostRedisplay();
 }
-
-void mouseButton(int button, int state, int x, int y) {
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        followObject = false; // Desativa o seguimento quando o mouse é pressionado
-        glutSetCursor(GLUT_CURSOR_NONE); // Captura o mouse
-    }
-    else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-        followObject = true; // Ativa o seguimento ao soltar o botão
-        glutSetCursor(GLUT_CURSOR_INHERIT); // Libera o mouse
-    }
-}
-
-void mouseMovement(int x, int y) {
-    static int lastX = 0, lastY = 0;
-    int deltaX = x - lastX;
-    int deltaY = y - lastY;
-
-    // Atualiza os ângulos de visão com base no movimento do mouse
-    cameraAngleX += deltaX * 0.01f; // Sensibilidade horizontal
-    cameraAngleY -= deltaY * 0.01f; // Sensibilidade vertical
-
-    // Limita o ângulo de pitch
-    if (cameraAngleY > 1.5f) cameraAngleY = 1.5f; // Limite superior
-    if (cameraAngleY < -1.5f) cameraAngleY = -1.5f; // Limite inferior
-
-    lastX = x;
-    lastY = y;
-
-    glutPostRedisplay(); // Atualiza a tela
-}
-
 
 void Teclado(unsigned char key, int x, int y) {
     if (key == 'q' || key == 'Q') {
@@ -649,11 +618,7 @@ void TecladoUp(unsigned char key, int x, int y) {
 
 void AtualizaCamera(int mouseX, int mouseY) {
     if (camera.freeCamera){
-        gluLookAt(cameraDistance * cos(cameraAngleY) * sin(cameraAngleX),
-                  cameraDistance * sin(cameraAngleY),
-                  cameraDistance * cos(camera.posY) * cos(camera.posX),
-                  obj.x, obj.y, obj.z, // Olhando para o objeto
-                  0.0f, 1.0f, 0.0f); // O vetor 'up' é o eixo Y
+        return;
     } else{
         if (!camera.isSideView) {
             GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
@@ -694,15 +659,43 @@ void spawnMeteors(int count) {
     }
 }
 
+// Função para desenhar uma esfera (ou qualquer forma que você queira usar como efeito visual)
+void drawCollisionEffect(float x, float y, float z) {
+    glPushMatrix();
+    glTranslatef(x, y, z);
+    glColor3f(1.0f, 0.0f, 0.0f); // Cor vermelha para o efeito de colisão
+    glutSolidSphere(0.5f, 20, 20); // Desenha uma esfera sólida
+    glPopMatrix();
+}
+
+// Função que desenha texto na tela
+void renderBitmapString(float x, float y, void *font, const char *string) {
+    glRasterPos2f(x, y); // Define a posição onde o texto será desenhado
+    for (const char *c = string; *c != '\0'; c++) {
+        glutBitmapCharacter(font, *c); // Desenha cada caractere da string
+    }
+}
+
 // Função que atualiza e desenha os meteoros
 void updateAndDrawMeteors() {
+
     for (int i = 0; i < meteous.size(); ++i) {
         meteous[i].update();
 
         // Verificar se o meteoro colidiu com o objeto do jogador
-        if (meteous[i].hasCollided(obj.x, obj.z, 5.0f)) {
+        if (meteous[i].hasCollided(obj.x, obj.z, 5.0f) && !meteous[i].hasCollidedBefore) {
             printf("Colisao!\n");
+            drawCollisionEffect(obj.x, obj.y, obj.z);
+            hits++;
+            meteous[i].hasCollidedBefore = true;
+        } else if (!meteous[i].hasCollided(obj.x, obj.z, 5.0f) ) {
+            meteous[i].hasCollidedBefore = false;
         }
         meteous[i].draw();
     }
+    // Desenhar o valor de hits na tela
+    char buffer[50];
+    snprintf(buffer, sizeof(buffer), "Hits: %d", hits);
+    renderBitmapString(-0.9f, 0.9f, GLUT_BITMAP_HELVETICA_18, buffer);
 }
+
