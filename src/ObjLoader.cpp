@@ -18,7 +18,7 @@ bool ObjLoader::load(const std::string& filename) {
 }
 
 // Método para renderizar o objeto
-void ObjLoader::render() const {
+void ObjLoader::draw() const {
     // Ativar a textura
     glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, this->texture);

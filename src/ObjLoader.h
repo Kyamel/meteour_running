@@ -12,7 +12,7 @@
 class ObjLoader {
 public:
     bool load(const std::string& filename);
-    void render() const;
+    void draw() const;
     void setTexture(GLuint texture); // Declaração do método setTexture
 
     GLfloat x = 0.0, z = 0.0, y = 0.0;

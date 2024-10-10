@@ -1,7 +1,6 @@
 #include <iostream>
-#include <GL/gl.h>         // Para OpenGL
-#include <GL/glu.h>        // Para funções de utilidade OpenGL
-#include <GL/freeglut.h>   // Para FreeGLUT
+#include <GL/gl.h>
+#include <GL/freeglut.h>
 #include <map>
 #include <chrono>
 #include <thread>
@@ -15,15 +14,6 @@
 #include "stb_image.h"
 
 using namespace std;
-
-ObjLoader obj;
-
-GLfloat cameraDistance = 5.0;
-GLfloat cameraHeight = 5.0;
-
-GLfloat cameraScale = 1.0;
-
-Camera camera(obj.x - cameraDistance, cameraHeight, obj.z - cameraDistance);
 
 class TestureHelper {
 public:
@@ -130,23 +120,6 @@ public:
     }
 };
 
-
-
-void Inicializa(void) {
-    GLint texturePiso, textureObj;
-
-    glClearColor(1.0, 1.0, 1.0, 0.0); // fundo branco
-    glEnable(GL_COLOR_MATERIAL);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glEnable(GL_DEPTH_TEST);
-
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(65, 1, 0.5, 500);
-}
-
 class Piso {
 
     private:
@@ -183,41 +156,6 @@ class Piso {
         }
 };
 
-class Lighting {
-public:
-    GLfloat globalAmbient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
-    GLfloat light_ambient[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // Luz ambiente
-    GLfloat light_diffuse[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // Luz difusa
-    GLfloat light_position[4] = { 0.0f, 1.0f, 0.0f, 0.0f }; // Posição da luz
-
-
-    Lighting() {
-        // Habilita a iluminação
-        glEnable(GL_LIGHTING);
-
-        // Habilita a luz 0
-        glEnable(GL_LIGHT0);
-
-        // Define a luz ambiente global
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, globalAmbient);
-
-        // Define as propriedades da luz
-        glLightfv(GL_LIGHT0, GL_AMBIENT, light_ambient);
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);
-        glLightfv(GL_LIGHT0, GL_POSITION, light_position);
-    }
-    void reshape(int width, int height) {
-        if (height == 0) height = 1;
-        glViewport(0, 0, width, height);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        gluPerspective(45.0, (float)width / (float)height, 0.1, 100.0);
-        glMatrixMode(GL_MODELVIEW);
-    }
-};
-
-
-
 class Meteour {
 public:
     GLfloat posX, posY, posZ;
@@ -247,7 +185,7 @@ public:
 
     bool hasCollided(GLfloat objX, GLfloat objZ, GLfloat objSize) {
         // Simples verificação de colisão com base nas posições X e Z
-        return (fabs(posX - objX) < objSize && fabs(posZ - objZ) < objSize && posY <= 0.0);
+        return (fabs(posX - objX) < objSize && fabs(posZ - objZ) < objSize && posY <= objSize);
     }
 
     void draw(){
@@ -260,20 +198,16 @@ public:
 };
 
 
-// Função que desenha o skyboy
-
 class Skybox {
 public:
     GLuint textures[6]; // Textures for the six faces of the skybox
 
-    // Constructor to load textures and set parameters
     void setTexture(const GLuint texture[6]) {
         for (int i = 0; i < 6; ++i) {
             this->textures[i] = texture[i];
         }
     }
 
-    // Method to draw the skybox
     void draw(float size, Camera camera) {
         glEnable(GL_TEXTURE_2D);  // Enable 2D textures
         glDisable(GL_DEPTH_TEST); // Disable depth testing to ensure skybox is drawn behind everything
@@ -344,27 +278,42 @@ public:
     }
 };
 
-void initLighting() {
+void drawLighting() {
     glEnable(GL_LIGHTING); // Ativa a iluminação
     glEnable(GL_LIGHT0);   // Ativa a fonte de luz 0
 
     // Propriedades da luz
-    GLfloat light_position[] = { 0.0f, 10.0f, 10.0f, 1.0f }; // Posição da luz
-    GLfloat light_diffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };    // Cor difusa da luz
-    GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };   // Cor especular da luz
+    GLfloat light_position[] = { 0.0f, 10.0f, 10.0f, 1.0f };// Posição da luz
+    GLfloat light_diffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };   // Cor difusa da luz
+    GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };  // Cor especular da luz
 
-    glLightfv(GL_LIGHT0, GL_POSITION, light_position); // Define a posição da luz
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);   // Define a cor difusa da luz
-    glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);  // Define a cor especular da luz
+    glLightfv(GL_LIGHT0, GL_POSITION, light_position);      // Define a posição da luz
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);        // Define a cor difusa da luz
+    glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);      // Define a cor especular da luz
 
     // Propriedades do material
-    GLfloat mat_diffuse[] = { 0.5f, 0.5f, 0.5f, 1.0f }; // Cor difusa do material
-    GLfloat mat_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f }; // Cor especular do material
-    GLfloat mat_shininess[] = { 50.0f };                  // Brilho do material
+    GLfloat mat_diffuse[] = { 0.5f, 0.5f, 0.5f, 1.0f };     // Cor difusa do material
+    GLfloat mat_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };    // Cor especular do material
+    GLfloat mat_shininess[] = { 50.0f };                    // Brilho do material
 
-    glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);     // Define a cor difusa do material
-    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);   // Define a cor especular do material
-    glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);  // Define o brilho do material
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);        // Define a cor difusa do material
+    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);      // Define a cor especular do material
+    glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);    // Define o brilho do material
+}
+
+void Inicializa(void) {
+    GLint texturePiso, textureObj;
+
+    glClearColor(1.0, 1.0, 1.0, 0.0); // fundo branco
+    glEnable(GL_COLOR_MATERIAL);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_DEPTH_TEST);
+
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    gluPerspective(65, 1, 0.5, 500);
 }
 
 // ----------------------------------------------------------------------------
@@ -376,24 +325,27 @@ const float zLimit = 100.0f;
 const float yLimit = 100.0f;
 const int screenWidth = 1280;
 const int screenHeight = 720;
+const int TARGET_FPS = 60;
+const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
 
 // ----------------------------------------------------------------------------
 // Variáveis globais
 // ----------------------------------------------------------------------------
 
-Lighting light = Lighting();
 Meteour met = Meteour(0.0f, 100.0f, 0.0f, 0.5f, 2.0);
 Skybox skybox = Skybox();
 std::vector<Meteour> meteous;
 FPSManager fpsManager;
+Piso piso = Piso(1.0, -0.0);
 
-auto piso = Piso(1.0, -0.0);
-const int TARGET_FPS = 60;
-const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
+ObjLoader obj;
+GLfloat cameraDistance = 5.0;
+GLfloat cameraHeight = 5.0;
+GLfloat cameraScale = 1.0;
+Camera camera(obj.x - cameraDistance, cameraHeight, obj.z - cameraDistance);
 
 map<unsigned char, bool> keyStates;
 int mouseX = 0, mouseY = 0;
-
 int hits = 0;
 
 // ----------------------------------------------------------------------------
@@ -405,14 +357,11 @@ void Teclado(unsigned char key, int x, int y);
 void TecladoUp(unsigned char key, int x, int y);
 void AtualizaMovimento(void);
 void AtualizaCamera(int mouseX, int mouseY);
-
-void mouseMovement(int x, int y);
-void mouseButton(int button, int state, int x, int y);
+void idle(int);
 
 // Meteoros
 void spawnMeteors(int count);
 void updateAndDrawMeteors();
-void idle(int);
 
 // ----------------------------------------------------------------------------
 // Função principal
@@ -431,12 +380,12 @@ int main(int argc, char** argv) {
     TestureHelper::LoadTexture("assets/textura_piso.jpg", texturePiso);
     TestureHelper::LoadTexture("assets/Car Texture 1.png", textureObj);
 
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[0] );   // Direita
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[1] );   // Esquerda
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[2] );   // Cima
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[3] );   // Baixo
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[4] );   // Frente
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[5] );   // Trás
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[0]);   // Direita
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[1]);   // Esquerda
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[2]);   // Cima
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[3]);   // Baixo
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[4]);   // Frente
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[5]);   // Trás
 
     skybox.setTexture(skyboxTextures);
     spawnMeteors(10);
@@ -476,39 +425,35 @@ void Desenha() {
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
 
-    initLighting();
-
+    drawLighting();
     skybox.draw(300.0f, camera);
-
     piso.draw(200.0f);
-
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
     AtualizaCamera(mouseX, mouseY);
     AtualizaMovimento();
-
     updateAndDrawMeteors();
 
     glColor3f(1.0, 0.0, 1.0);
     glPushMatrix();
         glTranslatef(obj.x, 0.0, obj.z);
         glRotatef(obj.y, 0.0, 1.0, 0.0);
-        obj.render();
+        obj.draw();
     glPopMatrix();
 
-    glutSwapBuffers(); // Troca os buffers
+    glutSwapBuffers();
     //glFlush(); // Garante que todas as operações estão completas
 
     glMatrixMode(GL_PROJECTION);
-    glPushMatrix();              // Salva a matriz de projeção atual
-    glLoadIdentity();            // Reseta a projeção
+    glPushMatrix();
+    glLoadIdentity();
     gluOrtho2D(0, screenWidth, 0, screenHeight);  // Definir projeção ortogonal (ajustar ao tamanho da janela)
 
     glMatrixMode(GL_MODELVIEW);  // Mudar para a matriz de modelo/visualização
-    glPushMatrix();              // Salva a matriz de visualização
-    glLoadIdentity();            // Reseta a visualização
+    glPushMatrix();
+    glLoadIdentity();
 
     fpsManager.calculateFPS();
     fpsManager.displayFPS(10, 740);
@@ -526,9 +471,8 @@ void Teclado(unsigned char key, int x, int y) {
     if (key == 'f' || key == 'F') {
         camera.freeCamera = !camera.freeCamera;
     }
-
     keyStates[key] = true;  // Marca a tecla como pressionada
-    AtualizaMovimento();
+    //AtualizaMovimento();
 }
 
 void AtualizaMovimento(void) {
