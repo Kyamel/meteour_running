@@ -389,7 +389,7 @@ int main(int argc, char** argv) {
 
     skybox.setTexture(skyboxTextures);
     spawnMeteors(10);
-    Inicializa();
+    glInit();
     obj.load("LowPolyCars.obj");
     obj.setTexture(textureObj);
     piso.setTexture(texturePiso);
