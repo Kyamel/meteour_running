@@ -696,6 +696,7 @@ void updateAndDrawMeteors() {
     // Desenhar o valor de hits na tela
     char buffer[50];
     snprintf(buffer, sizeof(buffer), "Hits: %d", hits);
+    GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
     renderBitmapString(-0.9f, 0.9f, GLUT_BITMAP_HELVETICA_18, buffer);
 }
 
