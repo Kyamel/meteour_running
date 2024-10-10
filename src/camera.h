@@ -9,6 +9,12 @@ public:
     float rotX, rotY;      // Ângulos de rotação
     int lastMouseX, lastMouseY; // Posição anterior do mouse
     int mouseDown = 0; // Estado do botão do mouse
+    bool freeCamera = false;
+
+     // Variáveis para armazenar a posição original
+    float originalPosX, originalPosY, originalPosZ;
+
+    bool isSideView = false;
 
     Camera(float startX, float startY, float startZ)
         : posX(startX), posY(startY), posZ(startZ), rotX(0), rotY(0) {}
@@ -75,6 +81,14 @@ public:
             tx, ty, tz,  // Ponto que a câmera está olhando
             0.0, 1.0, 0.0   // Vetor "up", mantendo o eixo Y como "up"
         );
+    }
+
+    void setSideView() {
+        isSideView = true;
+    }
+
+    void restore() {
+        isSideView = false;
     }
 };
 

@@ -16,9 +16,6 @@
 
 using namespace std;
 
-#define WINDOW_WIDTH 1366
-#define WINDOW_HEIGHT 768
-
 ObjLoader obj;
 
 GLfloat cameraDistance = 5.0;
@@ -133,87 +130,6 @@ public:
     }
 };
 
-FPSManager fpsManager;
-
-
-map<unsigned char, bool> keyStates;
-
-void AtualizaMovimento() {
-   if (keyStates['w']) {
-        obj.currentSpeed += 0.002f; // Aumenta a velocidade ao longo do tempo
-        obj.currentSpeed = fmin(obj.currentSpeed, obj.maxSpeed); // V max
-
-        obj.x += sin((obj.y) * 3.14 / 180) * obj.currentSpeed;
-        obj.z += cos((obj.y) * 3.14 / 180) * obj.currentSpeed;
-    } else {
-        obj.currentSpeed -= 0.01f; // Aumenta a velocidade ao longo do tempo
-        obj.currentSpeed = fmax(obj.currentSpeed, 0.0); // V max
-
-        obj.x += sin((obj.y) * 3.14 / 180) * obj.currentSpeed;
-        obj.z += cos((obj.y) * 3.14 / 180) * obj.currentSpeed;
-    }
-    // mover para trás
-    if (keyStates['s']) {
-        obj.x -= sin((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
-        obj.z -= cos((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
-    }
-    // girar à esquerda
-    if (keyStates['a']) {
-        obj.y += obj.velocidadeRotacao;
-    }
-    // girar à direita
-    if (keyStates['d']) {
-        obj.y -= obj.velocidadeRotacao;
-    }
-
-    // Zoom com 'i' e 'k'
-    if (keyStates['i']) {
-        cameraScale += obj.velocidadeZoom;
-    }
-
-    if (keyStates['k']) {
-        if (cameraScale >= 1.0) {
-            cameraScale -= obj.velocidadeZoom;
-        }
-    }
-}
-
-
-void Teclado(unsigned char key, int x, int y) {
-    keyStates[key] = true;  // Marca a tecla como pressionada
-    AtualizaMovimento();
-}
-
-void TecladoUp(unsigned char key, int x, int y) {
-    keyStates[key] = false; // Marca a tecla como solta
-}
-
-
-void TecladoEspecial(int key, int x, int y) {
-    switch (key) {
-        case GLUT_KEY_LEFT:
-            obj.y += 5.0;  // Girar o objeto para a esquerda
-            break;
-        case GLUT_KEY_RIGHT:
-            obj.y -= 5.0;  // Girar o objeto para a direita
-            break;
-    }
-
-}
-
-void AtualizaCamera() {
-    GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
-
-    // Atualiza a posição da câmera baseada na posição e rotação do objeto
-    camera.posX = obj.x - cameraDistance * sin(rad) * cameraScale;
-    camera.posZ = obj.z - cameraDistance * cos(rad) * cameraScale;
-    camera.posY = cameraHeight * cameraScale;  // Altura fixa da câmera
-
-    // A câmera olha diretamente para o objeto
-    camera.lookAt(obj.x, 0.0, obj.z); // ATENÇÂO< TIRAR O OBJY SE DER ERRADO
-}
-
-
 
 
 void Inicializa(void) {
@@ -243,7 +159,8 @@ class Piso {
 
         };
 
-        void render() const {
+
+        void draw(float size) const {
             glPushMatrix();
             glTranslatef(0.0, altura, 0.0);
             glScalef(escala, escala, escala);
@@ -252,12 +169,11 @@ class Piso {
             glBindTexture(GL_TEXTURE_2D, this->texturePiso); // Usa a textura carregada
 
             glBegin(GL_QUADS);
-            glTexCoord2f(1.0f, 1.0f); glVertex3f(100.0, 0.0, 100.0);
-            glTexCoord2f(0.0f, 1.0f); glVertex3f(-100.0, 0.0, 100.0);
-            glTexCoord2f(0.0f, 0.0f); glVertex3f(-100.0, 0.0, -100.0);
-            glTexCoord2f(1.0f, 0.0f); glVertex3f(100.0, 0.0, -100.0);
+                glTexCoord2f(1.0f, 1.0f); glVertex3f(size, 0.0, size);
+                glTexCoord2f(0.0f, 1.0f); glVertex3f(-size, 0.0, size);
+                glTexCoord2f(0.0f, 0.0f); glVertex3f(-size, 0.0, -size);
+                glTexCoord2f(1.0f, 0.0f); glVertex3f(size, 0.0, -size);
             glEnd();
-
             glDisable(GL_TEXTURE_2D); // Desabilita o uso de texturas
             glPopMatrix();
         }
@@ -300,10 +216,7 @@ public:
     }
 };
 
-auto piso = Piso(1.0, -4.0);
 
-const int TARGET_FPS = 60;
-const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
 
 class Meteour {
 public:
@@ -315,15 +228,18 @@ public:
         : posX(x), posY(y), posZ(z), speed(speed), radius(radius) {}
 
     void update() {
-        if (posY > 0.0f){
+        if (posY > -50.0f){
             posY -= speed; // Meteoro cai no eixo Y
         }
         else{
-            posY = 1000.0f;
-            float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * 3.14;
-            float distance = 10.0f + static_cast<float>(rand()) / RAND_MAX * 50.0f;
-            posX = obj.x + distance * cos(angle);
-            posY = obj.z + distance * sin(angle);
+            GLfloat distanceY = 200 + (rand() % 151); // Varía entre 150 e 200
+            posY = distanceY;
+            // Gera uma distância aleatória entre -100 e 100
+            GLfloat distanceX = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
+            GLfloat distanceZ = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
+
+            GLfloat meteorX = distanceX; // Agora usando distanceX
+            GLfloat meteorZ = distanceZ; // Agora usando distanceZ
         }
     }
 
@@ -341,49 +257,214 @@ public:
     }
 };
 
-// Vetor que armazenará os meteoros
-std::vector<Meteour> meteous;
 
-// Função para gerar meteoros em posições aleatórias ao redor do jogador
-void spawnMeteors(int count) {
-    for (int i = 0; i < count; ++i) {
-        float angle = static_cast<float>(rand()) / RAND_MAX * 2.0f * 3.14;
-        float distance = 10.0f + static_cast<float>(rand()) / RAND_MAX * 50.0f;
+// Função que desenha o skyboy
 
-        GLfloat meteorX = obj.x + distance * cos(angle);
-        GLfloat meteorZ = obj.z + distance * sin(angle);
-        GLfloat meteorSpeed = 0.001f + static_cast<float>(rand()) / RAND_MAX;
-        double meteorRadius = 1.0 + static_cast<double>(rand()) / RAND_MAX * 2.0; // Raio entre 1 e 3
+class Skybox {
+public:
+    GLuint textures[6]; // Textures for the six faces of the skybox
 
-        meteous.push_back(Meteour(meteorX, 1000.0f, meteorZ, meteorSpeed, meteorRadius)); // Meteoro começa no Y = 10
+    // Constructor to load textures and set parameters
+    void setTexture(const GLuint texture[6]) {
+        for (int i = 0; i < 6; ++i) {
+            this->textures[i] = texture[i];
+        }
     }
+
+    // Method to draw the skybox
+    void draw(float size, Camera camera) {
+        glEnable(GL_TEXTURE_2D);  // Enable 2D textures
+        glDisable(GL_DEPTH_TEST); // Disable depth testing to ensure skybox is drawn behind everything
+
+        glPushMatrix();
+        glLoadIdentity();
+        glTranslatef(camera.posX, camera.posY, camera.posZ);
+
+            // Right face
+            glBindTexture(GL_TEXTURE_2D, this->textures[0]);
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex3f( size, -size, -size);
+                glTexCoord2f(1.0, 0.0); glVertex3f( size, -size,  size);
+                glTexCoord2f(1.0, 1.0); glVertex3f( size,  size,  size);
+                glTexCoord2f(0.0, 1.0); glVertex3f( size,  size, -size);
+            glEnd();
+
+            // Left face
+            glBindTexture(GL_TEXTURE_2D, this->textures[1]);
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex3f(-size, -size,  size);
+                glTexCoord2f(1.0, 0.0); glVertex3f(-size, -size, -size);
+                glTexCoord2f(1.0, 1.0); glVertex3f(-size,  size, -size);
+                glTexCoord2f(0.0, 1.0); glVertex3f(-size,  size,  size);
+            glEnd();
+
+            // Top face
+            glBindTexture(GL_TEXTURE_2D, this->textures[2]);
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex3f(-size,  size, -size);
+                glTexCoord2f(1.0, 0.0); glVertex3f( size,  size, -size);
+                glTexCoord2f(1.0, 1.0); glVertex3f( size,  size,  size);
+                glTexCoord2f(0.0, 1.0); glVertex3f(-size,  size,  size);
+            glEnd();
+
+            // Bottom face
+            glBindTexture(GL_TEXTURE_2D, this->textures[3]);
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex3f(-size, -size, -size);
+                glTexCoord2f(1.0, 0.0); glVertex3f(-size, -size,  size);
+                glTexCoord2f(1.0, 1.0); glVertex3f( size, -size,  size);
+                glTexCoord2f(0.0, 1.0); glVertex3f( size, -size, -size);
+            glEnd();
+
+            // Front face
+            glBindTexture(GL_TEXTURE_2D, this->textures[4]);
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex3f(-size, -size,  size);
+                glTexCoord2f(1.0, 0.0); glVertex3f( size, -size,  size);
+                glTexCoord2f(1.0, 1.0); glVertex3f( size,  size,  size);
+                glTexCoord2f(0.0, 1.0); glVertex3f(-size,  size,  size);
+            glEnd();
+
+            // Back face
+            glBindTexture(GL_TEXTURE_2D, this->textures[5]);
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex3f( size, -size, -size);
+                glTexCoord2f(1.0, 0.0); glVertex3f(-size, -size, -size);
+                glTexCoord2f(1.0, 1.0); glVertex3f(-size,  size, -size);
+                glTexCoord2f(0.0, 1.0); glVertex3f( size,  size, -size);
+            glEnd();
+
+        glPopMatrix();
+
+        glEnable(GL_DEPTH_TEST); // Re-enable depth testing
+        glDisable(GL_TEXTURE_2D); // Disable textures
+
+    }
+};
+
+void initLighting() {
+    glEnable(GL_LIGHTING); // Ativa a iluminação
+    glEnable(GL_LIGHT0);   // Ativa a fonte de luz 0
+
+    // Propriedades da luz
+    GLfloat light_position[] = { 0.0f, 10.0f, 10.0f, 1.0f }; // Posição da luz
+    GLfloat light_diffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };    // Cor difusa da luz
+    GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };   // Cor especular da luz
+
+    glLightfv(GL_LIGHT0, GL_POSITION, light_position); // Define a posição da luz
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);   // Define a cor difusa da luz
+    glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);  // Define a cor especular da luz
+
+    // Propriedades do material
+    GLfloat mat_diffuse[] = { 0.5f, 0.5f, 0.5f, 1.0f }; // Cor difusa do material
+    GLfloat mat_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f }; // Cor especular do material
+    GLfloat mat_shininess[] = { 50.0f };                  // Brilho do material
+
+    glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);     // Define a cor difusa do material
+    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);   // Define a cor especular do material
+    glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);  // Define o brilho do material
 }
 
-// Função que atualiza e desenha os meteoros
-void updateAndDrawMeteors() {
-    std::cout << "Quantidade de meteoros: " << meteous.size() << std::endl;
-    for (int i = 0; i < meteous.size(); ++i) {
-        meteous[i].update();
+// ----------------------------------------------------------------------------
+// Constantes
+// ----------------------------------------------------------------------------
 
-        // Verificar se o meteoro colidiu com o objeto do jogador
-        if (meteous[i].hasCollided(obj.x, obj.z, 5.0f)) {
-            printf("Colisão detectada com o meteoro!\n");
-            meteous.erase(meteous.begin() + i); // Remove o meteoro se colidir
-            --i;
-            continue;
-        }
-        if(meteous[i].posY < 0.0){
-            meteous.erase(meteous.begin() + i);
-            --i;
-            continue;
-        }
-        meteous[i].draw();
-    }
-}
+const float xLimit = 100.0f;
+const float zLimit = 100.0f;
+const float yLimit = 100.0f;
+const int screenWidth = 1280;
+const int screenHeight = 720;
+
+// ----------------------------------------------------------------------------
+// Variáveis globais
+// ----------------------------------------------------------------------------
 
 Lighting light = Lighting();
-
 Meteour met = Meteour(0.0f, 100.0f, 0.0f, 0.5f, 2.0);
+Skybox skybox = Skybox();
+std::vector<Meteour> meteous;
+FPSManager fpsManager;
+auto piso = Piso(1.0, -0.0);
+const int TARGET_FPS = 60;
+const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
+
+map<unsigned char, bool> keyStates;
+bool isCPressed = false;
+int mouseX = 0, mouseY = 0;
+
+float cameraAngleX = 0.0f; // Angulo de pitch
+float cameraAngleY = 0.0f; // Angulo de yaw
+bool followObject = false;
+
+// ----------------------------------------------------------------------------
+// Gerenciar Eventos e Desenhar
+// ----------------------------------------------------------------------------
+
+void Desenha();
+void Teclado(unsigned char key, int x, int y);
+void TecladoUp(unsigned char key, int x, int y);
+void AtualizaMovimento(void);
+void AtualizaCamera(int mouseX, int mouseY);
+
+void mouseMovement(int x, int y);
+void mouseButton(int button, int state, int x, int y);
+
+// Meteoros
+void spawnMeteors(int count);
+void updateAndDrawMeteors();
+void idle(int);
+
+// ----------------------------------------------------------------------------
+// Função principal
+// ----------------------------------------------------------------------------
+
+int main(int argc, char** argv) {
+    glutInit(&argc, argv);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGB);
+    glutInitWindowSize(screenWidth, screenHeight);
+    glutInitWindowPosition(0, 0);
+    glutCreateWindow("Meteour Running");
+
+    GLuint texturePiso, textureObj;
+    GLuint skyboxTextures[6];
+
+    TestureHelper::LoadTexture("assets/textura_piso.jpg", texturePiso);
+    TestureHelper::LoadTexture("assets/Car Texture 1.png", textureObj);
+
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[0] );   // Direita
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[1] );   // Esquerda
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[2] );   // Cima
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[3] );   // Baixo
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[4] );   // Frente
+    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[5] );   // Trás
+
+    skybox.setTexture(skyboxTextures);
+    spawnMeteors(10);
+    Inicializa();
+    obj.load("LowPolyCars.obj");
+    obj.setTexture(textureObj);
+    piso.setTexture(texturePiso);
+
+        glutDisplayFunc(Desenha);
+        glutKeyboardFunc(Teclado);
+        glutKeyboardUpFunc(TecladoUp);
+        // glutReshapeFunc(reshape);
+        glutMotionFunc(mouseMovement);
+        glutMouseFunc(mouseButton);
+        glutTimerFunc(1000/60, idle, 0);
+        glutMainLoop();
+
+    return 0;
+}
+
+// ----------------------------------------------------------------------------
+// Gerenciar Eventos e Desenhar
+// ----------------------------------------------------------------------------
+
+void idle(int){
+    glutPostRedisplay();
+    glutTimerFunc(1000/60, idle, 0);
+}
 
 void Desenha() {
 
@@ -391,37 +472,24 @@ void Desenha() {
     glEnable(GL_DEPTH_TEST);
 
     glMatrixMode(GL_PROJECTION);
-    glPushMatrix();              // Salva a matriz de projeção atual
-    glLoadIdentity();            // Reseta a projeção
-    gluOrtho2D(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT);  // Definir projeção ortogonal (ajustar ao tamanho da janela)
-
-    glMatrixMode(GL_MODELVIEW);  // Mudar para a matriz de modelo/visualização
-    glPushMatrix();              // Salva a matriz de visualização
-    glLoadIdentity();            // Reseta a visualização
-
-    fpsManager.calculateFPS();
-    fpsManager.displayFPS(10, 740);
-
-    glMatrixMode(GL_PROJECTION);
     glPopMatrix();
     glMatrixMode(GL_MODELVIEW);
     glPopMatrix();
 
-    piso.render();
+    initLighting();
+
+    skybox.draw(300.0f, camera);
+
+    piso.draw(200.0f);
+
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    AtualizaCamera();
+    AtualizaCamera(mouseX, mouseY);
     AtualizaMovimento();
 
-    for(int i = 0; i < 10; i++){
-        meteous[i].update();
-        if(meteous[i].hasCollided(obj.x, obj.z, 5.0f)){
-            printf("colisao");
-        }
-        meteous[i].draw();
-    }
+    updateAndDrawMeteors();
 
     glColor3f(1.0, 0.0, 1.0);
     glPushMatrix();
@@ -430,43 +498,211 @@ void Desenha() {
         obj.render();
     glPopMatrix();
 
-
-    glutPostRedisplay();
     glutSwapBuffers(); // Troca os buffers
     //glFlush(); // Garante que todas as operações estão completas
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();              // Salva a matriz de projeção atual
+    glLoadIdentity();            // Reseta a projeção
+    gluOrtho2D(0, screenWidth, 0, screenHeight);  // Definir projeção ortogonal (ajustar ao tamanho da janela)
+
+    glMatrixMode(GL_MODELVIEW);  // Mudar para a matriz de modelo/visualização
+    glPushMatrix();              // Salva a matriz de visualização
+    glLoadIdentity();            // Reseta a visualização
+
+    fpsManager.calculateFPS();
+    fpsManager.displayFPS(10, 740);
+
+    glutPostRedisplay();
 }
 
-void reshape(int width, int height) {
-    light.reshape(width, height); // Chama o método de reshape da luz
+void mouseButton(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        followObject = false; // Desativa o seguimento quando o mouse é pressionado
+        glutSetCursor(GLUT_CURSOR_NONE); // Captura o mouse
+    }
+    else if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+        followObject = true; // Ativa o seguimento ao soltar o botão
+        glutSetCursor(GLUT_CURSOR_INHERIT); // Libera o mouse
+    }
 }
 
-int main(int argc, char** argv) {
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGB);
-    glutInitWindowSize(WINDOW_WIDTH, WINDOW_HEIGHT);
-    glutInitWindowPosition(0, 0);
-    glutCreateWindow("Meteour Running");
+void mouseMovement(int x, int y) {
+    static int lastX = 0, lastY = 0;
+    int deltaX = x - lastX;
+    int deltaY = y - lastY;
 
-    GLuint texturePiso, textureObj;
-    TestureHelper::LoadTexture("assets/textura_piso.jpg", texturePiso);
-    TestureHelper::LoadTexture("assets/textura_piso.jpg", textureObj);
+    // Atualiza os ângulos de visão com base no movimento do mouse
+    cameraAngleX += deltaX * 0.01f; // Sensibilidade horizontal
+    cameraAngleY -= deltaY * 0.01f; // Sensibilidade vertical
 
-    spawnMeteors(10);
+    // Limita o ângulo de pitch
+    if (cameraAngleY > 1.5f) cameraAngleY = 1.5f; // Limite superior
+    if (cameraAngleY < -1.5f) cameraAngleY = -1.5f; // Limite inferior
 
-    Inicializa();
-    obj.load("bonde.obj");
-    obj.setTexture(textureObj);
-    piso.setTexture(texturePiso);
+    lastX = x;
+    lastY = y;
+
+    glutPostRedisplay(); // Atualiza a tela
+}
 
 
-        glutDisplayFunc(Desenha);
-        glutKeyboardFunc(Teclado);
-        glutKeyboardUpFunc(TecladoUp);
-       // glutReshapeFunc(reshape);
-        glutMouseFunc([](int button, int state, int x, int y) { camera.mouseButton(button, state, x, y); });
-        glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
+void Teclado(unsigned char key, int x, int y) {
+    if (key == 'q' || key == 'Q') {
+        exit(0);
+    }
+    if (key == 'c' || key == 'C') {
+        camera.isSideView = !camera.isSideView;
+    }
+    if (key == 'f' || key == 'F') {
+        camera.freeCamera = !camera.freeCamera;
+    }
 
-    glutMainLoop();
+    keyStates[key] = true;  // Marca a tecla como pressionada
+    AtualizaMovimento();
+}
 
-    return 0;
+void AtualizaMovimento(void) {
+   if (keyStates['w']) {
+        obj.currentSpeed += 0.0001f; // Aumenta a velocidade ao longo do tempo
+        obj.currentSpeed = fmin(obj.currentSpeed, obj.maxSpeed); // V max
+
+        // Calcula as novas posições
+        float newX = obj.x + sin((obj.y) * 3.14 / 180) * obj.currentSpeed;
+        float newZ = obj.z + cos((obj.y) * 3.14 / 180) * obj.currentSpeed;
+
+        // Verifica se as novas posições estão dentro dos limites
+        if (newX > xLimit) {
+            obj.x = xLimit;
+        } else if (newX < -xLimit) {
+            obj.x = -xLimit;
+        } else {
+            obj.x = newX;
+        }
+
+        if (newZ > zLimit) {
+            obj.z = zLimit;
+        } else if (newZ < -zLimit) {
+            obj.z = -zLimit;
+        } else {
+            obj.z = newZ;
+        }
+
+
+    } else {
+        obj.currentSpeed -= 0.0001f; // Aumenta a velocidade ao longo do tempo
+        obj.currentSpeed = fmax(obj.currentSpeed, 0.0); // V max
+
+        float newX = obj.x + sin((obj.y) * 3.14 / 180) * obj.currentSpeed;
+        float newZ = obj.z + cos((obj.y) * 3.14 / 180) * obj.currentSpeed;
+
+        // Verifica se as novas posições estão dentro dos limites
+        if (newX > xLimit) {
+            obj.x = xLimit;
+        } else if (newX < -xLimit) {
+            obj.x = -xLimit;
+        } else {
+            obj.x = newX;
+        }
+
+        if (newZ > zLimit) {
+            obj.z = zLimit;
+        } else if (newZ < -zLimit) {
+            obj.z = -zLimit;
+        } else {
+            obj.z = newZ;
+        }
+
+    }
+    // mover para trás
+    if (keyStates['s']) {
+        obj.x -= sin((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
+        obj.z -= cos((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
+    }
+    // girar à esquerda
+    if (keyStates['a']) {
+        obj.y += obj.velocidadeRotacao;
+    }
+    // girar à direita
+    if (keyStates['d']) {
+        obj.y -= obj.velocidadeRotacao;
+    }
+
+    // Zoom com 'i' e 'k'
+    if (keyStates['i']) {
+        cameraScale += obj.velocidadeZoom;
+        if (cameraScale >= 20.0) {
+            cameraScale = 20.0;
+        }
+    }
+
+    if (keyStates['k']) {
+        if (cameraScale >= 1.0) {
+            cameraScale -= obj.velocidadeZoom;
+        }
+    }
+}
+
+void TecladoUp(unsigned char key, int x, int y) {
+    keyStates[key] = false; // Marca a tecla como solta
+}
+
+void AtualizaCamera(int mouseX, int mouseY) {
+    if (camera.freeCamera){
+        gluLookAt(cameraDistance * cos(cameraAngleY) * sin(cameraAngleX),
+                  cameraDistance * sin(cameraAngleY),
+                  cameraDistance * cos(camera.posY) * cos(camera.posX),
+                  obj.x, obj.y, obj.z, // Olhando para o objeto
+                  0.0f, 1.0f, 0.0f); // O vetor 'up' é o eixo Y
+    } else{
+        if (!camera.isSideView) {
+            GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
+
+            // Atualiza a posição da câmera baseada na posição e rotação do objeto
+            camera.posX = obj.x - cameraDistance * sin(rad) * cameraScale;
+            camera.posZ = obj.z - cameraDistance * cos(rad) * cameraScale;
+            camera.posY = cameraHeight * cameraScale;  // Altura fixa da câmera
+
+            // A câmera em cima do objeto
+            camera.lookAt(obj.x, 0.0, obj.z);
+        }
+        if (camera.isSideView) {
+            camera.lookAt(obj.x - 10.0f, 0.0, obj.z); // Câmera global focada no objeto
+        }
+    }
+
+}
+
+// ------------------------------------------------------------------
+// Meteroros
+// ------------------------------------------------------------------
+
+
+// Função para gerar meteoros em posições aleatórias ao redor do jogador
+void spawnMeteors(int count) {
+    for (int i = 0; i < count; ++i) {
+        // Gera uma distância aleatória entre -100 e 100
+        GLfloat distanceX = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
+        GLfloat distanceZ = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
+
+        GLfloat meteorX = obj.x + distanceX;
+        GLfloat meteorZ = obj.z + distanceZ;
+        GLfloat meteorSpeed = 0.01f;
+        double meteorRadius = 1.0 + static_cast<double>(rand()) / RAND_MAX * 2.0;
+
+        meteous.push_back(Meteour(meteorX, 300.0f, meteorZ, meteorSpeed, meteorRadius * 8.0f)); // Meteoro começa no Y = 10
+    }
+}
+
+// Função que atualiza e desenha os meteoros
+void updateAndDrawMeteors() {
+    for (int i = 0; i < meteous.size(); ++i) {
+        meteous[i].update();
+
+        // Verificar se o meteoro colidiu com o objeto do jogador
+        if (meteous[i].hasCollided(obj.x, obj.z, 5.0f)) {
+            printf("Colisao!\n");
+        }
+        meteous[i].draw();
+    }
 }

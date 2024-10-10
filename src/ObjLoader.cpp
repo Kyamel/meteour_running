@@ -25,6 +25,7 @@ void ObjLoader::render() const {
 
     for (const auto& face : faces) {
         glBegin(GL_POLYGON); // ou GL_TRIANGLES se necessário
+        glColor3f(1.0f, 1.0f, 1.0f);
 
         for (const auto& vertexIndex : face) {
             // Aplica a normal, se disponível

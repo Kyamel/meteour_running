@@ -16,12 +16,12 @@ public:
     void setTexture(GLuint texture); // Declaração do método setTexture
 
     GLfloat x = 0.0, z = 0.0, y = 0.0;
-    float velocidadeMovimento = 0.2f;
-    float velocidadeRotacao = 1.0f;
-    float velocidadeZoom = 0.1f;
+    float velocidadeMovimento = 0.02f;
+    float velocidadeRotacao = 0.1f;
+    float velocidadeZoom = 0.01f;
 
-    float currentSpeed = 0.1f;
-    const float maxSpeed = 0.4f;
+    float currentSpeed = 0.01f;
+    const float maxSpeed = 0.08f;
 
 private:
     void processLine(const std::string& line);
