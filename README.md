@@ -4,7 +4,6 @@
 
 ### Autores
 - Lucas dos Anjos Camelo
-- Géssica
 
 ## Descrição do Projeto
 Este projeto foi desenvolvido como parte da disciplina de Computação Gráfica na Universidade Federal de Ouro Preto (UFOP).
