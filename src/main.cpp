@@ -1,645 +1,383 @@
-#include <iostream>
-#include <GL/gl.h>
 #include <GL/freeglut.h>
-#include <map>
-#include <chrono>
-#include <thread>
-#include <cstdlib>
+#include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <random>
+#include <string>
+#include <vector>
 
 #define STB_IMAGE_IMPLEMENTATION
-
-#include "ObjLoader.h"
-#include "camera.h"
 #include "stb_image.h"
+#include "ObjLoader.h"
 
-using namespace std;
+namespace {
+constexpr float pi = 3.14159265f;
+constexpr float arena = 95.0f;
+constexpr int maxHealth = 100;
+constexpr int meteorCount = 12;
+constexpr float carHalfWidth = 3.4f;
+constexpr float carHalfLength = 8.0f;
+constexpr float carHeight = 5.3f;
 
-class TestureHelper {
-public:
-   static void LoadTexture(const char* filename, GLuint& textureID) {
-        int width, height, channels;
-        unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+struct Meteor { float x, y, z, radius, speed, spin; };
+struct Impact { float x, z, age; bool car; };
+std::vector<Meteor> meteors;
+std::vector<Impact> impacts;
+std::mt19937 randomEngine(std::random_device{}());
+ObjLoader car;
+GLuint groundTexture = 0, skyTexture = 0, meteorTexture = 0;
+GLUquadric* sphere = nullptr;
+std::filesystem::path assetRoot;
+std::array<bool, 256> keys{};
+int width = 1280, height = 720, health = maxHealth, hits = 0;
+float heading = 0, velocity = 0, survival = 0, invulnerability = 0, flash = 0;
+int lastTick = 0;
+bool gameOver = false;
 
-        if (!data) {
-            std::cerr << "Erro ao carregar a textura: " << stbi_failure_reason() << std::endl;
-            return;
-        }
-
-        // Converte para formato RGBA se necessário
-        if (channels == 3) {
-            unsigned char* rgbaData = new unsigned char[width * height * 4];
-            for (int i = 0; i < width * height; ++i) {
-                rgbaData[i * 4 + 0] = data[i * 3 + 0]; // R
-                rgbaData[i * 4 + 1] = data[i * 3 + 1]; // G
-                rgbaData[i * 4 + 2] = data[i * 3 + 2]; // B
-                rgbaData[i * 4 + 3] = 255;             // A
-            }
-
-            glGenTextures(1, &textureID);
-            glBindTexture(GL_TEXTURE_2D, textureID);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgbaData);
-
-            // Configura os parâmetros da textura
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-            delete[] rgbaData; // Liberar os dados RGBA
-        } else if (channels == 4) {
-            glGenTextures(1, &textureID);
-            glBindTexture(GL_TEXTURE_2D, textureID);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-            // Configura os parâmetros da textura
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        } else {
-            std::cerr << "Formato de imagem não suportado." << std::endl;
-        }
-
-        stbi_image_free(data); // Liberar memória do data original
-   }
-};
-
-class FPSManager {
-private:
-    float fps;
-    int frameCount;
-    float previousTime;
-
-public:
-    FPSManager() : fps(0.0f), frameCount(0), previousTime(0.0f) {}
-
-    // Função para calcular FPS
-    void calculateFPS() {
-        frameCount++;
-        float currentTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;  // Tempo em segundos
-        float deltaTime = currentTime - previousTime;
-
-        if (deltaTime > 1.0f) {
-            fps = frameCount / deltaTime;  // Calcula o FPS
-            frameCount = 0;  // Reseta a contagem de quadros
-            previousTime = currentTime;  // Atualiza o tempo anterior
-        }
-    }
-
-    // Função para desenhar texto na tela
-    void drawText(const char *text, float x, float y) {
-
-        glRasterPos2f(x, y);
-
-        while (*text) {
-            glutBitmapCharacter(GLUT_BITMAP_HELVETICA_18, *text);
-            text++;
-        }
-    }
-
-    // Função para exibir o FPS na tela
-    void displayFPS(float x, float y) {
-        char fpsText[32];
-        snprintf(fpsText, sizeof(fpsText), "FPS: %.2f", fps);
-
-        float padding = 5.0f;
-        float textWidth = glutBitmapLength(GLUT_BITMAP_HELVETICA_18, (const unsigned char*)fpsText);
-        float textHeight = 18.0f; // Altura da fonte usada (HELVETICA_18)
-
-        // Desenhar o fundo (um retângulo branco)
-        glColor3f(0.0f, 0.0f, 0.0f); // Cor do fundo: branco
-        glBegin(GL_QUADS);
-            glVertex2f(x - padding, y - padding);
-            glVertex2f(x + textWidth + padding, y - padding);
-            glVertex2f(x + textWidth + padding, y + textHeight + padding);
-            glVertex2f(x - padding, y + textHeight + padding);
-        glEnd();
-
-        // Desenhar o texto por cima do fundo
-        glColor3f(1.0f, 1.0f, 1.0f);
-        glDisable(GL_DEPTH_TEST);
-        drawText(fpsText, x, y + textHeight / 2);
-        glEnable(GL_DEPTH_TEST);
-    }
-};
-
-class Piso {
-
-    private:
-        float escala = 1.0;
-        float altura = 0.0;
-        GLuint texturePiso;
-
-    public:
-        Piso(float escala, float altura){
-
-        };
-
-
-        void draw(float size) const {
-            glPushMatrix();
-            glTranslatef(0.0, altura, 0.0);
-            glScalef(escala, escala, escala);
-
-            glEnable(GL_TEXTURE_2D); // Habilita o uso de texturas
-            glBindTexture(GL_TEXTURE_2D, this->texturePiso); // Usa a textura carregada
-
-            glBegin(GL_QUADS);
-                glTexCoord2f(1.0f, 1.0f); glVertex3f(size, 0.0, size);
-                glTexCoord2f(0.0f, 1.0f); glVertex3f(-size, 0.0, size);
-                glTexCoord2f(0.0f, 0.0f); glVertex3f(-size, 0.0, -size);
-                glTexCoord2f(1.0f, 0.0f); glVertex3f(size, 0.0, -size);
-            glEnd();
-            glDisable(GL_TEXTURE_2D); // Desabilita o uso de texturas
-            glPopMatrix();
-        }
-
-        void setTexture(GLuint texturePiso){
-            this->texturePiso = texturePiso;
-        }
-};
-
-class Meteour {
-public:
-    GLfloat posX, posY, posZ;
-    GLfloat speed;
-    double radius;
-    bool hasCollidedBefore = false;
-    float cooldown;
-
-    Meteour(GLfloat x, GLfloat y, GLfloat z, GLfloat speed, double radius)
-        : posX(x), posY(y), posZ(z), speed(speed), radius(radius) {}
-
-    void update() {
-        if (posY > -50.0f){
-            posY -= speed; // Meteoro cai no eixo Y
-        }
-        else{
-            GLfloat distanceY = 200 + (rand() % 151); // Varía entre 150 e 200
-            posY = distanceY;
-            // Gera uma distância aleatória entre -100 e 100
-            GLfloat distanceX = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
-            GLfloat distanceZ = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
-
-            GLfloat meteorX = distanceX; // Agora usando distanceX
-            GLfloat meteorZ = distanceZ; // Agora usando distanceZ
-        }
-    }
-
-    bool hasCollided(GLfloat objX, GLfloat objZ, GLfloat objSize) {
-        // Simples verificação de colisão com base nas posições X e Z
-        return (fabs(posX - objX) < objSize && fabs(posZ - objZ) < objSize && posY <= objSize);
-    }
-
-    void draw(){
-        glPushMatrix();
-        glColor3f(0.6f, 0.3f, 0.0f);  // Marrom
-        glTranslated(posX, posY, posZ);
-        glutSolidSphere(radius, 10, 10);
-        glPopMatrix();
-    }
-};
-
-
-class Skybox {
-public:
-    GLuint textures[6]; // Textures for the six faces of the skybox
-
-    void setTexture(const GLuint texture[6]) {
-        for (int i = 0; i < 6; ++i) {
-            this->textures[i] = texture[i];
-        }
-    }
-
-    void draw(float size, Camera camera) {
-        glEnable(GL_TEXTURE_2D);  // Enable 2D textures
-        glDisable(GL_DEPTH_TEST); // Disable depth testing to ensure skybox is drawn behind everything
-
-        glPushMatrix();
-        glLoadIdentity();
-        glTranslatef(camera.posX, camera.posY, camera.posZ);
-
-            // Right face
-            glBindTexture(GL_TEXTURE_2D, this->textures[0]);
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex3f( size, -size, -size);
-                glTexCoord2f(1.0, 0.0); glVertex3f( size, -size,  size);
-                glTexCoord2f(1.0, 1.0); glVertex3f( size,  size,  size);
-                glTexCoord2f(0.0, 1.0); glVertex3f( size,  size, -size);
-            glEnd();
-
-            // Left face
-            glBindTexture(GL_TEXTURE_2D, this->textures[1]);
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex3f(-size, -size,  size);
-                glTexCoord2f(1.0, 0.0); glVertex3f(-size, -size, -size);
-                glTexCoord2f(1.0, 1.0); glVertex3f(-size,  size, -size);
-                glTexCoord2f(0.0, 1.0); glVertex3f(-size,  size,  size);
-            glEnd();
-
-            // Top face
-            glBindTexture(GL_TEXTURE_2D, this->textures[2]);
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex3f(-size,  size, -size);
-                glTexCoord2f(1.0, 0.0); glVertex3f( size,  size, -size);
-                glTexCoord2f(1.0, 1.0); glVertex3f( size,  size,  size);
-                glTexCoord2f(0.0, 1.0); glVertex3f(-size,  size,  size);
-            glEnd();
-
-            // Bottom face
-            glBindTexture(GL_TEXTURE_2D, this->textures[3]);
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex3f(-size, -size, -size);
-                glTexCoord2f(1.0, 0.0); glVertex3f(-size, -size,  size);
-                glTexCoord2f(1.0, 1.0); glVertex3f( size, -size,  size);
-                glTexCoord2f(0.0, 1.0); glVertex3f( size, -size, -size);
-            glEnd();
-
-            // Front face
-            glBindTexture(GL_TEXTURE_2D, this->textures[4]);
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex3f(-size, -size,  size);
-                glTexCoord2f(1.0, 0.0); glVertex3f( size, -size,  size);
-                glTexCoord2f(1.0, 1.0); glVertex3f( size,  size,  size);
-                glTexCoord2f(0.0, 1.0); glVertex3f(-size,  size,  size);
-            glEnd();
-
-            // Back face
-            glBindTexture(GL_TEXTURE_2D, this->textures[5]);
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex3f( size, -size, -size);
-                glTexCoord2f(1.0, 0.0); glVertex3f(-size, -size, -size);
-                glTexCoord2f(1.0, 1.0); glVertex3f(-size,  size, -size);
-                glTexCoord2f(0.0, 1.0); glVertex3f( size,  size, -size);
-            glEnd();
-
-        glPopMatrix();
-
-        glEnable(GL_DEPTH_TEST); // Re-enable depth testing
-        glDisable(GL_TEXTURE_2D); // Disable textures
-
-    }
-};
-
-void drawLighting() {
-    glEnable(GL_LIGHTING); // Ativa a iluminação
-    glEnable(GL_LIGHT0);   // Ativa a fonte de luz 0
-
-    // Propriedades da luz
-    GLfloat light_position[] = { 0.0f, 10.0f, 10.0f, 1.0f };// Posição da luz
-    GLfloat light_diffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };   // Cor difusa da luz
-    GLfloat light_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };  // Cor especular da luz
-
-    glLightfv(GL_LIGHT0, GL_POSITION, light_position);      // Define a posição da luz
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, light_diffuse);        // Define a cor difusa da luz
-    glLightfv(GL_LIGHT0, GL_SPECULAR, light_specular);      // Define a cor especular da luz
-
-    // Propriedades do material
-    GLfloat mat_diffuse[] = { 0.5f, 0.5f, 0.5f, 1.0f };     // Cor difusa do material
-    GLfloat mat_specular[] = { 1.0f, 1.0f, 1.0f, 1.0f };    // Cor especular do material
-    GLfloat mat_shininess[] = { 50.0f };                    // Brilho do material
-
-    glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);        // Define a cor difusa do material
-    glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);      // Define a cor especular do material
-    glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);    // Define o brilho do material
+float randomFloat(float low, float high) {
+    return std::uniform_real_distribution<float>(low, high)(randomEngine);
 }
 
-void glInit(void) {
-    GLint texturePiso, textureObj;
+GLuint loadTexture(const std::filesystem::path& path, bool repeat = false) {
+    int w, h, channels;
+    stbi_uc* pixels = stbi_load(path.string().c_str(), &w, &h, &channels, 4);
+    if (!pixels) {
+        std::cerr << "Falha ao carregar " << path << ": " << stbi_failure_reason() << '\n';
+        return 0;
+    }
+    GLuint id;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+    stbi_image_free(pixels);
+    return id;
+}
 
-    glClearColor(1.0, 1.0, 1.0, 0.0); // fundo branco
-    glEnable(GL_COLOR_MATERIAL);
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
+GLuint createMeteorTexture() {
+    constexpr int size = 128;
+    std::array<unsigned char, size * size * 3> pixels{};
+    // Tiled, deterministic mottled rock; no external meteor asset required.
+    std::mt19937 rng(67);
+    std::array<float, 16 * 16> noise{};
+    for (float& n : noise) n = std::uniform_real_distribution<float>(0, 1)(rng);
+    for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
+        const int coarse = noise[(y / 8) * 16 + x / 8] * 75;
+        const int fine = static_cast<int>(rng() % 38);
+        const int i = (y * size + x) * 3;
+        pixels[i] = static_cast<unsigned char>(85 + coarse + fine);
+        pixels[i + 1] = static_cast<unsigned char>(57 + coarse / 2 + fine / 2);
+        pixels[i + 2] = static_cast<unsigned char>(43 + coarse / 3 + fine / 3);
+    }
+    GLuint id;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, size, size, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    return id;
+}
+
+void resetMeteor(Meteor& m, bool initial = false) {
+    m.x = std::clamp(car.x + randomFloat(-42, 42), -arena, arena);
+    m.z = std::clamp(car.z + randomFloat(-42, 42), -arena, arena);
+    m.y = randomFloat(initial ? 28.0f : 90.0f, initial ? 105.0f : 145.0f);
+    m.radius = randomFloat(1.6f, 3.4f);
+    m.speed = randomFloat(24.0f, 40.0f);
+    m.spin = randomFloat(0, 360);
+}
+
+bool touchesCar(const Meteor& m) {
+    // Transform the meteor into car space, then test a sphere against the car box.
+    const float angle = heading * pi / 180.0f;
+    const float dx = m.x - car.x, dz = m.z - car.z;
+    const float localX = dx * std::cos(angle) - dz * std::sin(angle);
+    const float localZ = dx * std::sin(angle) + dz * std::cos(angle);
+    const float nearestX = std::clamp(localX, -carHalfWidth, carHalfWidth);
+    const float nearestY = std::clamp(m.y, 0.0f, carHeight);
+    const float nearestZ = std::clamp(localZ, -carHalfLength, carHalfLength);
+    const float distanceSquared = (localX-nearestX)*(localX-nearestX) +
+        (m.y-nearestY)*(m.y-nearestY) + (localZ-nearestZ)*(localZ-nearestZ);
+    return distanceSquared <= m.radius * m.radius;
+}
+
+void restart() {
+    car.x = car.z = 0;
+    heading = velocity = survival = invulnerability = flash = 0;
+    health = maxHealth;
+    hits = 0;
+    gameOver = false;
+    impacts.clear();
+    for (auto& m : meteors) resetMeteor(m, true);
+    lastTick = glutGet(GLUT_ELAPSED_TIME);
+}
+
+void update(float dt) {
+    flash = std::max(0.0f, flash - dt * 2.4f);
+    for (auto& impact : impacts) impact.age += dt;
+    impacts.erase(std::remove_if(impacts.begin(), impacts.end(),
+        [](const Impact& i) { return i.age >= 0.75f; }), impacts.end());
+    if (gameOver) return;
+    survival += dt;
+    invulnerability = std::max(0.0f, invulnerability - dt);
+    const float drive = (keys['w'] ? 1.0f : 0.0f) - (keys['s'] ? 1.0f : 0.0f);
+    const float target = drive * (drive < 0 ? 10.0f : 19.0f);
+    velocity += (target - velocity) * std::min(1.0f, dt * (drive ? 3.0f : 2.5f));
+    const float steering = (keys['a'] ? 1.0f : 0.0f) - (keys['d'] ? 1.0f : 0.0f);
+    heading += steering * 95.0f * dt;
+    const float angle = heading * pi / 180.0f;
+    car.x = std::clamp(car.x + std::sin(angle) * velocity * dt, -arena, arena);
+    car.z = std::clamp(car.z + std::cos(angle) * velocity * dt, -arena, arena);
+    for (auto& m : meteors) {
+        m.y -= m.speed * dt;
+        m.spin += 32.0f * dt;
+        if (touchesCar(m)) {
+            impacts.push_back({m.x, m.z, 0, true});
+            if (invulnerability == 0) {
+                health = std::max(0, health - 20);
+                ++hits;
+                flash = 0.7f;
+                invulnerability = 1.0f;
+                if (health == 0) gameOver = true;
+            }
+            resetMeteor(m);
+        } else if (m.y <= m.radius) {
+            impacts.push_back({m.x, m.z, 0, false});
+            resetMeteor(m);
+        }
+    }
+}
+
+void drawGround() {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, groundTexture);
+    glColor3f(0.76f, 0.79f, 0.72f);
+    glNormal3f(0, 1, 0);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0); glVertex3f(-200, -0.04f, -200);
+    glTexCoord2f(40, 0); glVertex3f(200, -0.04f, -200);
+    glTexCoord2f(40, 40); glVertex3f(200, -0.04f, 200);
+    glTexCoord2f(0, 40); glVertex3f(-200, -0.04f, 200);
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+}
+
+void drawSky() {
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_DEPTH_TEST);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, skyTexture);
+    glColor3f(1, 1, 1);
+    glPushMatrix();
+    glTranslatef(car.x, 0, car.z);
+    gluQuadricOrientation(sphere, GLU_INSIDE);
+    gluSphere(sphere, 230, 32, 20);
+    gluQuadricOrientation(sphere, GLU_OUTSIDE);
+    glPopMatrix();
+    glDisable(GL_TEXTURE_2D);
     glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_LIGHTING);
+}
 
+void drawMeteors() {
+    for (const auto& m : meteors) {
+        glPushMatrix();
+        glTranslatef(m.x, m.y, m.z);
+        glRotatef(m.spin, 0.4f, 1, 0.2f);
+        glColor3f(1, 0.83f, 0.64f);
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, meteorTexture);
+        gluSphere(sphere, m.radius, 12, 10);
+        glDisable(GL_TEXTURE_2D);
+        glPopMatrix();
+    }
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    for (const auto& m : meteors) {
+        glBegin(GL_TRIANGLE_FAN);
+        glColor4f(1, 0.42f, 0.1f, 0.55f);
+        glVertex3f(m.x, m.y + m.radius * 0.5f, m.z);
+        glColor4f(1, 0.2f, 0.02f, 0);
+        for (int i = 0; i <= 12; ++i) {
+            const float a = i * 2 * pi / 12;
+            glVertex3f(m.x + std::cos(a) * m.radius * 0.8f,
+                m.y + m.radius * 4.5f, m.z + std::sin(a) * m.radius * 0.8f);
+        }
+        glEnd();
+    }
+    for (const auto& impact : impacts) {
+        const float t = impact.age / 0.75f;
+        const float radius = (impact.car ? 2.0f : 0.8f) + t * 8.0f;
+        glLineWidth(3.0f);
+        glColor4f(1, impact.car ? 0.15f : 0.55f, 0.05f, 1 - t);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < 32; ++i) {
+            const float a = i * 2 * pi / 32;
+            glVertex3f(impact.x + std::cos(a) * radius, 0.08f, impact.z + std::sin(a) * radius);
+        }
+        glEnd();
+    }
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+}
 
+void rectangle(float x, float y, float w, float h) {
+    glBegin(GL_QUADS);
+    glVertex2f(x, y); glVertex2f(x + w, y);
+    glVertex2f(x + w, y + h); glVertex2f(x, y + h);
+    glEnd();
+}
+
+void label(float x, float y, const std::string& value, void* font = GLUT_BITMAP_HELVETICA_18) {
+    glRasterPos2f(x, y);
+    for (unsigned char c : value) glutBitmapCharacter(font, c);
+}
+
+void drawHud() {
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    gluOrtho2D(0, width, height, 0);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_LIGHTING);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.06f, 0.09f, 0.13f, 0.78f);
+    rectangle(16, 16, 316, 84);
+    glColor3f(1, 1, 1);
+    char text[100];
+    std::snprintf(text, sizeof(text), "VIDA  %d / %d", health, maxHealth);
+    label(30, 43, text);
+    glColor3f(0.25f, 0.28f, 0.30f);
+    rectangle(30, 54, 286, 20);
+    glColor3f(health > 40 ? 0.25f : 0.9f, health > 40 ? 0.78f : 0.26f, 0.23f);
+    rectangle(30, 54, 286.0f * health / maxHealth, 20);
+    glColor3f(1, 1, 1);
+    std::snprintf(text, sizeof(text), "Tempo: %.0fs    Impactos: %d", survival, hits);
+    label(30, 94, text, GLUT_BITMAP_HELVETICA_12);
+    label(22, height - 24, "W/S mover  |  A/D virar  |  R reiniciar  |  Q sair", GLUT_BITMAP_HELVETICA_12);
+    if (flash > 0) {
+        glColor4f(1, 0.08f, 0.02f, flash * 0.32f);
+        rectangle(0, 0, width, height);
+    }
+    if (gameOver) {
+        glColor4f(0.02f, 0.03f, 0.07f, 0.78f);
+        rectangle(0, 0, width, height);
+        glColor3f(1, 0.38f, 0.2f);
+        label(width / 2.0f - 84, height / 2.0f - 24, "GAME OVER", GLUT_BITMAP_TIMES_ROMAN_24);
+        glColor3f(1, 1, 1);
+        std::snprintf(text, sizeof(text), "Sobreviveu %.0f segundos", survival);
+        label(width / 2.0f - 100, height / 2.0f + 12, text);
+        label(width / 2.0f - 111, height / 2.0f + 46, "Pressione R para jogar novamente");
+    }
+    glDisable(GL_BLEND);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_DEPTH_TEST);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+}
+
+void display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    const float angle = heading * pi / 180.0f;
+    gluLookAt(car.x - std::sin(angle) * 23, 15, car.z - std::cos(angle) * 23,
+        car.x, 2.0f, car.z, 0, 1, 0);
+    GLfloat sun[] = {-60, 90, 40, 0};
+    glLightfv(GL_LIGHT0, GL_POSITION, sun);
+    drawSky();
+    drawGround();
+    drawMeteors();
+    if (invulnerability == 0 || static_cast<int>(invulnerability * 12) % 2 == 0) {
+        glPushMatrix();
+        glTranslatef(car.x, 0, car.z);
+        glRotatef(heading, 0, 1, 0);
+        glScalef(4, 4, 4);
+        car.draw();
+        glPopMatrix();
+    }
+    drawHud();
+    glutSwapBuffers();
+}
+
+void reshape(int w, int h) {
+    width = std::max(1, w);
+    height = std::max(1, h);
+    glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(65, 1, 0.5, 500);
+    gluPerspective(65, static_cast<double>(width) / height, 0.5, 500);
+    glMatrixMode(GL_MODELVIEW);
 }
 
-// ----------------------------------------------------------------------------
-// Constantes
-// ----------------------------------------------------------------------------
+void keyDown(unsigned char key, int, int) {
+    if (key == 27 || key == 'q' || key == 'Q') std::exit(0);
+    if (key == 'r' || key == 'R') restart();
+    keys[static_cast<unsigned char>(std::tolower(key))] = true;
+}
+void keyUp(unsigned char key, int, int) { keys[static_cast<unsigned char>(std::tolower(key))] = false; }
 
-const float xLimit = 100.0f;
-const float zLimit = 100.0f;
-const float yLimit = 100.0f;
-const int screenWidth = 1280;
-const int screenHeight = 720;
-const int TARGET_FPS = 60;
-const float FRAME_TIME = 1.0f / TARGET_FPS;  // Tempo de cada frame (segundos)
-
-// ----------------------------------------------------------------------------
-// Variáveis globais
-// ----------------------------------------------------------------------------
-
-Meteour met = Meteour(0.0f, 100.0f, 0.0f, 0.5f, 2.0);
-Skybox skybox = Skybox();
-std::vector<Meteour> meteous;
-FPSManager fpsManager;
-Piso piso = Piso(1.0, -0.0);
-
-ObjLoader obj;
-GLfloat cameraDistance = 5.0;
-GLfloat cameraHeight = 5.0;
-GLfloat cameraScale = 1.0;
-Camera camera(obj.x - cameraDistance, cameraHeight, obj.z - cameraDistance);
-
-map<unsigned char, bool> keyStates;
-int mouseX = 0, mouseY = 0;
-int hits = 0;
-
-// ----------------------------------------------------------------------------
-// Gerenciar Eventos e Desenhar
-// ----------------------------------------------------------------------------
-
-void Desenha();
-void Teclado(unsigned char key, int x, int y);
-void TecladoUp(unsigned char key, int x, int y);
-void AtualizaMovimento(void);
-void AtualizaCamera(int mouseX, int mouseY);
-void idle(int);
-
-// Meteoros
-void spawnMeteors(int count);
-void updateAndDrawMeteors();
-
-// ----------------------------------------------------------------------------
-// Função principal
-// ----------------------------------------------------------------------------
+void tick(int) {
+    const int now = glutGet(GLUT_ELAPSED_TIME);
+    const float dt = std::clamp((now - lastTick) / 1000.0f, 0.0f, 0.05f);
+    lastTick = now;
+    update(dt);
+    glutPostRedisplay();
+    glutTimerFunc(16, tick, 0);
+}
+}
 
 int main(int argc, char** argv) {
+    assetRoot = std::filesystem::absolute(argv[0]).parent_path();
     glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGB);
-    glutInitWindowSize(screenWidth, screenHeight);
-    glutInitWindowPosition(0, 0);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGBA);
+    glutInitWindowSize(width, height);
     glutCreateWindow("Meteour Running");
-
-    GLuint texturePiso, textureObj;
-    GLuint skyboxTextures[6];
-
-    TestureHelper::LoadTexture("assets/textura_piso.jpg", texturePiso);
-    TestureHelper::LoadTexture("assets/Car Texture 1.png", textureObj);
-
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[0]);   // Direita
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[1]);   // Esquerda
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[2]);   // Cima
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[3]);   // Baixo
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[4]);   // Frente
-    TestureHelper::LoadTexture("assets/skybox.jpg", skyboxTextures[5]);   // Trás
-
-    skybox.setTexture(skyboxTextures);
-    spawnMeteors(10);
-    glInit();
-    obj.load("LowPolyCars.obj");
-    obj.setTexture(textureObj);
-    piso.setTexture(texturePiso);
-
-        glutDisplayFunc(Desenha);
-        glutKeyboardFunc(Teclado);
-        glutKeyboardUpFunc(TecladoUp);
-        // glutReshapeFunc(reshape);
-        glutMotionFunc([](int x, int y) { camera.mouseMotion(x, y); });
-        glutMouseFunc([](int button, int state, int x, int y) { camera.mouseButton(button, state, x, y); });
-        glutTimerFunc(1000/60, idle, 0);
-        glutMainLoop();
-
-    return 0;
-}
-
-// ----------------------------------------------------------------------------
-// Gerenciar Eventos e Desenhar
-// ----------------------------------------------------------------------------
-
-void idle(int){
-    glutPostRedisplay();
-    glutTimerFunc(1000/60, idle, 0);
-}
-
-void Desenha() {
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Limpa os buffers
+    glClearColor(0.31f, 0.49f, 0.7f, 1);
     glEnable(GL_DEPTH_TEST);
-
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-    glPopMatrix();
-
-    drawLighting();
-    skybox.draw(300.0f, camera);
-    piso.draw(200.0f);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    AtualizaCamera(mouseX, mouseY);
-    AtualizaMovimento();
-    updateAndDrawMeteors();
-
-    glColor3f(1.0, 0.0, 1.0);
-    glPushMatrix();
-        glTranslatef(obj.x, 0.0, obj.z);
-        glRotatef(obj.y, 0.0, 1.0, 0.0);
-        obj.draw();
-    glPopMatrix();
-
-    glutSwapBuffers();
-    //glFlush(); // Garante que todas as operações estão completas
-
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    gluOrtho2D(0, screenWidth, 0, screenHeight);  // Definir projeção ortogonal (ajustar ao tamanho da janela)
-
-    glMatrixMode(GL_MODELVIEW);  // Mudar para a matriz de modelo/visualização
-    glPushMatrix();
-    glLoadIdentity();
-
-    fpsManager.calculateFPS();
-    fpsManager.displayFPS(10, 740);
-
-    glutPostRedisplay();
-}
-
-void Teclado(unsigned char key, int x, int y) {
-    if (key == 'q' || key == 'Q') {
-        exit(0);
-    }
-    if (key == 'c' || key == 'C') {
-        camera.isSideView = !camera.isSideView;
-    }
-    if (key == 'f' || key == 'F') {
-        camera.freeCamera = !camera.freeCamera;
-    }
-    keyStates[key] = true;  // Marca a tecla como pressionada
-    //AtualizaMovimento();
-}
-
-void AtualizaMovimento(void) {
-   if (keyStates['w']) {
-        obj.currentSpeed += 0.0001f; // Aumenta a velocidade ao longo do tempo
-        obj.currentSpeed = fmin(obj.currentSpeed, obj.maxSpeed); // V max
-
-        // Calcula as novas posições
-        float newX = obj.x + sin((obj.y) * 3.14 / 180) * obj.currentSpeed;
-        float newZ = obj.z + cos((obj.y) * 3.14 / 180) * obj.currentSpeed;
-
-        // Verifica se as novas posições estão dentro dos limites
-        if (newX > xLimit) {
-            obj.x = xLimit;
-        } else if (newX < -xLimit) {
-            obj.x = -xLimit;
-        } else {
-            obj.x = newX;
-        }
-
-        if (newZ > zLimit) {
-            obj.z = zLimit;
-        } else if (newZ < -zLimit) {
-            obj.z = -zLimit;
-        } else {
-            obj.z = newZ;
-        }
-
-
-    } else {
-        obj.currentSpeed -= 0.0001f; // Aumenta a velocidade ao longo do tempo
-        obj.currentSpeed = fmax(obj.currentSpeed, 0.0); // V max
-
-        float newX = obj.x + sin((obj.y) * 3.14 / 180) * obj.currentSpeed;
-        float newZ = obj.z + cos((obj.y) * 3.14 / 180) * obj.currentSpeed;
-
-        // Verifica se as novas posições estão dentro dos limites
-        if (newX > xLimit) {
-            obj.x = xLimit;
-        } else if (newX < -xLimit) {
-            obj.x = -xLimit;
-        } else {
-            obj.x = newX;
-        }
-
-        if (newZ > zLimit) {
-            obj.z = zLimit;
-        } else if (newZ < -zLimit) {
-            obj.z = -zLimit;
-        } else {
-            obj.z = newZ;
-        }
-
-    }
-    // mover para trás
-    if (keyStates['s']) {
-        obj.x -= sin((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
-        obj.z -= cos((obj.y) * 3.14 / 180) * obj.velocidadeMovimento;
-    }
-    // girar à esquerda
-    if (keyStates['a']) {
-        obj.y += obj.velocidadeRotacao;
-    }
-    // girar à direita
-    if (keyStates['d']) {
-        obj.y -= obj.velocidadeRotacao;
-    }
-
-    // Zoom com 'i' e 'k'
-    if (keyStates['i']) {
-        cameraScale += obj.velocidadeZoom;
-        if (cameraScale >= 20.0) {
-            cameraScale = 20.0;
-        }
-    }
-
-    if (keyStates['k']) {
-        if (cameraScale >= 1.0) {
-            cameraScale -= obj.velocidadeZoom;
-        }
-    }
-}
-
-void TecladoUp(unsigned char key, int x, int y) {
-    keyStates[key] = false; // Marca a tecla como solta
-}
-
-void AtualizaCamera(int mouseX, int mouseY) {
-    if (camera.freeCamera){
-        return;
-    } else{
-        if (!camera.isSideView) {
-            GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
-
-            // Atualiza a posição da câmera baseada na posição e rotação do objeto
-            camera.posX = obj.x - cameraDistance * sin(rad) * cameraScale;
-            camera.posZ = obj.z - cameraDistance * cos(rad) * cameraScale;
-            camera.posY = cameraHeight * cameraScale;  // Altura fixa da câmera
-
-            // A câmera em cima do objeto
-            camera.lookAt(obj.x, 0.0, obj.z);
-        }
-        if (camera.isSideView) {
-            camera.lookAt(obj.x - 10.0f, 0.0, obj.z); // Câmera global focada no objeto
-        }
-    }
-
-}
-
-// ------------------------------------------------------------------
-// Meteroros
-// ------------------------------------------------------------------
-
-
-// Função para gerar meteoros em posições aleatórias ao redor do jogador
-void spawnMeteors(int count) {
-    for (int i = 0; i < count; ++i) {
-        // Gera uma distância aleatória entre -100 e 100
-        GLfloat distanceX = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
-        GLfloat distanceZ = (static_cast<float>(rand()) / RAND_MAX * 200.0f) - 100.0f;
-
-        GLfloat meteorX = obj.x + distanceX;
-        GLfloat meteorZ = obj.z + distanceZ;
-        GLfloat meteorSpeed = 0.01f;
-        double meteorRadius = 1.0 + static_cast<double>(rand()) / RAND_MAX * 2.0;
-
-        meteous.push_back(Meteour(meteorX, 300.0f, meteorZ, meteorSpeed, meteorRadius * 8.0f)); // Meteoro começa no Y = 10
-    }
-}
-
-// Função para desenhar uma esfera (ou qualquer forma que você queira usar como efeito visual)
-void drawCollisionEffect(float x, float y, float z) {
-    glPushMatrix();
-    glTranslatef(x, y, z);
-    glColor3f(1.0f, 0.0f, 0.0f); // Cor vermelha para o efeito de colisão
-    glutSolidSphere(0.5f, 20, 20); // Desenha uma esfera sólida
-    glPopMatrix();
-}
-
-// Função que desenha texto na tela
-void renderBitmapString(float x, float y, void *font, const char *string) {
-    glRasterPos2f(x, y); // Define a posição onde o texto será desenhado
-    for (const char *c = string; *c != '\0'; c++) {
-        glutBitmapCharacter(font, *c); // Desenha cada caractere da string
-    }
-}
-
-// Função que atualiza e desenha os meteoros
-void updateAndDrawMeteors() {
-
-    for (int i = 0; i < meteous.size(); ++i) {
-        meteous[i].update();
-
-        // Verificar se o meteoro colidiu com o objeto do jogador
-        if (meteous[i].hasCollided(obj.x, obj.z, 5.0f) && !meteous[i].hasCollidedBefore) {
-            printf("Colisao!\n");
-            drawCollisionEffect(obj.x, obj.y, obj.z);
-            hits++;
-            meteous[i].hasCollidedBefore = true;
-        } else if (!meteous[i].hasCollided(obj.x, obj.z, 5.0f) ) {
-            meteous[i].hasCollidedBefore = false;
-        }
-        meteous[i].draw();
-    }
-    // Desenhar o valor de hits na tela
-    char buffer[50];
-    snprintf(buffer, sizeof(buffer), "Hits: %d", hits);
-    GLfloat rad = (obj.y * 3.14) / 180; // Converter o ângulo para radianos
-    renderBitmapString(-0.9f, 0.9f, GLUT_BITMAP_HELVETICA_18, buffer);
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
+    glEnable(GL_NORMALIZE);
+    GLfloat ambient[] = {0.36f, 0.37f, 0.4f, 1};
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
+    groundTexture = loadTexture(assetRoot / "assets/textura_piso.jpg", true);
+    skyTexture = loadTexture(assetRoot / "assets/skybox.jpg", true);
+    meteorTexture = createMeteorTexture();
+    sphere = gluNewQuadric();
+    gluQuadricTexture(sphere, GL_TRUE);
+    if (!car.load((assetRoot / "LowPolyCars.obj").string())) return 1;
+    car.setTexture(loadTexture(assetRoot / "assets/Car Texture 1.png"));
+    meteors.resize(meteorCount);
+    restart();
+    glutDisplayFunc(display);
+    glutReshapeFunc(reshape);
+    glutKeyboardFunc(keyDown);
+    glutKeyboardUpFunc(keyUp);
+    glutIgnoreKeyRepeat(1);
+    glutTimerFunc(16, tick, 0);
+    glutMainLoop();
+    gluDeleteQuadric(sphere);
+    return 0;
 }

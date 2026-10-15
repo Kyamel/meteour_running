@@ -8,6 +8,11 @@ bool ObjLoader::load(const std::string& filename) {
         return false;
     }
 
+    vertices.clear();
+    normais.clear();
+    texturas.clear();
+    faces.clear();
+    if (displayList) { glDeleteLists(displayList, 1); displayList = 0; }
     std::string line;
     while (std::getline(file, line)) {
         processLine(line);
@@ -19,30 +24,31 @@ bool ObjLoader::load(const std::string& filename) {
 
 // Método para renderizar o objeto
 void ObjLoader::draw() const {
-    // Ativar a textura
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, this->texture);
-
-    for (const auto& face : faces) {
-        glBegin(GL_POLYGON); // ou GL_TRIANGLES se necessário
-        glColor3f(1.0f, 1.0f, 1.0f);
-        glScalef(4.0f, 4.0f, 4.0f);
-
-        for (const auto& vertexIndex : face) {
-            // Aplica a normal, se disponível
-            if (vertexIndex.size() > 2 && vertexIndex[2] >= 0) {
-                glNormal3fv(&normais[vertexIndex[2]][0]);
+    if (!displayList) {
+        displayList = glGenLists(1);
+        glNewList(displayList, GL_COMPILE);
+        for (const auto& face : faces) {
+            glBegin(GL_POLYGON);
+            for (const auto& vertexIndex : face) {
+                if (vertexIndex.size() > 2 && vertexIndex[2] >= 0 &&
+                    static_cast<size_t>(vertexIndex[2]) < normais.size())
+                    glNormal3fv(normais[vertexIndex[2]].data());
+                if (vertexIndex.size() > 1 && vertexIndex[1] >= 0 &&
+                    static_cast<size_t>(vertexIndex[1]) < texturas.size())
+                    glTexCoord2fv(texturas[vertexIndex[1]].data());
+                if (!vertexIndex.empty() && vertexIndex[0] >= 0 &&
+                    static_cast<size_t>(vertexIndex[0]) < vertices.size())
+                    glVertex3fv(vertices[vertexIndex[0]].data());
             }
-            // Aplica a coordenada de textura, se disponível
-            if (vertexIndex.size() > 1 && vertexIndex[1] >= 0) {
-                glTexCoord2fv(&texturas[vertexIndex[1]][0]);
-            }
-            // Renderiza o vértice
-            glVertex3fv(&vertices[vertexIndex[0]][0]);
+            glEnd();
         }
-        glEnd();
+        glEndList();
     }
-    glDisable(GL_TEXTURE_2D); // Desativa a textura após renderizar
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glColor3f(1, 1, 1);
+    glCallList(displayList);
+    glDisable(GL_TEXTURE_2D);
 }
 
 

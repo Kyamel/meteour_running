@@ -25,13 +25,14 @@ public:
 
 private:
     void processLine(const std::string& line);
+    mutable GLuint displayList = 0;
     
     std::vector<std::vector<GLfloat>> vertices;
     std::vector<std::vector<GLfloat>> normais;
     std::vector<std::vector<GLfloat>> texturas;
     std::vector<std::vector<std::vector<GLint>>> faces;
 
-    GLuint texture;
+    GLuint texture = 0;
 
 
 };
