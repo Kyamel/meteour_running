@@ -17,7 +17,9 @@
 
 namespace {
 constexpr float pi = 3.14159265f;
-constexpr float arena = 95.0f;
+constexpr float groundHalfSize = 200.0f;
+constexpr float forwardSpeed = 38.0f;
+constexpr float reverseSpeed = 18.0f;
 constexpr int maxHealth = 100;
 constexpr int meteorCount = 12;
 constexpr float carHalfWidth = 3.4f;
@@ -90,10 +92,11 @@ GLuint createMeteorTexture() {
 }
 
 void resetMeteor(Meteor& m, bool initial = false) {
-    m.x = std::clamp(car.x + randomFloat(-42, 42), -arena, arena);
-    m.z = std::clamp(car.z + randomFloat(-42, 42), -arena, arena);
-    m.y = randomFloat(initial ? 28.0f : 90.0f, initial ? 105.0f : 145.0f);
     m.radius = randomFloat(1.6f, 3.4f);
+    const float meteorLimit = groundHalfSize - m.radius;
+    m.x = std::clamp(car.x + randomFloat(-42, 42), -meteorLimit, meteorLimit);
+    m.z = std::clamp(car.z + randomFloat(-42, 42), -meteorLimit, meteorLimit);
+    m.y = randomFloat(initial ? 28.0f : 90.0f, initial ? 105.0f : 145.0f);
     m.speed = randomFloat(24.0f, 40.0f);
     m.spin = randomFloat(0, 360);
 }
@@ -132,13 +135,20 @@ void update(float dt) {
     survival += dt;
     invulnerability = std::max(0.0f, invulnerability - dt);
     const float drive = (keys['w'] ? 1.0f : 0.0f) - (keys['s'] ? 1.0f : 0.0f);
-    const float target = drive * (drive < 0 ? 10.0f : 19.0f);
-    velocity += (target - velocity) * std::min(1.0f, dt * (drive ? 3.0f : 2.5f));
+    const float target = drive * (drive < 0 ? reverseSpeed : forwardSpeed);
+    velocity += (target - velocity) * std::min(1.0f, dt * (drive ? 4.0f : 2.5f));
     const float steering = (keys['a'] ? 1.0f : 0.0f) - (keys['d'] ? 1.0f : 0.0f);
-    heading += steering * 95.0f * dt;
+    heading += steering * 110.0f * dt;
     const float angle = heading * pi / 180.0f;
-    car.x = std::clamp(car.x + std::sin(angle) * velocity * dt, -arena, arena);
-    car.z = std::clamp(car.z + std::cos(angle) * velocity * dt, -arena, arena);
+    // Keep the rotated car on the same ground quad that drawGround renders.
+    const float halfX = std::abs(std::cos(angle)) * carHalfWidth +
+        std::abs(std::sin(angle)) * carHalfLength;
+    const float halfZ = std::abs(std::sin(angle)) * carHalfWidth +
+        std::abs(std::cos(angle)) * carHalfLength;
+    const float xLimit = groundHalfSize - halfX;
+    const float zLimit = groundHalfSize - halfZ;
+    car.x = std::clamp(car.x + std::sin(angle) * velocity * dt, -xLimit, xLimit);
+    car.z = std::clamp(car.z + std::cos(angle) * velocity * dt, -zLimit, zLimit);
     for (auto& m : meteors) {
         m.y -= m.speed * dt;
         m.spin += 32.0f * dt;
@@ -165,10 +175,10 @@ void drawGround() {
     glColor3f(0.76f, 0.79f, 0.72f);
     glNormal3f(0, 1, 0);
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0); glVertex3f(-200, -0.04f, -200);
-    glTexCoord2f(40, 0); glVertex3f(200, -0.04f, -200);
-    glTexCoord2f(40, 40); glVertex3f(200, -0.04f, 200);
-    glTexCoord2f(0, 40); glVertex3f(-200, -0.04f, 200);
+    glTexCoord2f(0, 0); glVertex3f(-groundHalfSize, -0.04f, -groundHalfSize);
+    glTexCoord2f(40, 0); glVertex3f(groundHalfSize, -0.04f, -groundHalfSize);
+    glTexCoord2f(40, 40); glVertex3f(groundHalfSize, -0.04f, groundHalfSize);
+    glTexCoord2f(0, 40); glVertex3f(-groundHalfSize, -0.04f, groundHalfSize);
     glEnd();
     glDisable(GL_TEXTURE_2D);
 }
