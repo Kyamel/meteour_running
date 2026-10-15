@@ -41,6 +41,11 @@
       devShells = forEachSystem (pkgs: {
         default = pkgs.mkShell {
           packages = [ pkgs.cmake pkgs.pkg-config pkgs.gdb pkgs.freeglut pkgs.libGL pkgs.libGLU ];
+          # An impure shell may inherit -L/usr/lib, which links an older host
+          # glibc instead of the one used by the Nix OpenGL dependencies.
+          shellHook = ''
+            unset NIX_CFLAGS_LINK
+          '';
         };
       });
     };
