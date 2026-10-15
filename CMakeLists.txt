@@ -7,9 +7,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenGL REQUIRED)
 find_package(GLUT REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(SDL2_MIXER REQUIRED IMPORTED_TARGET SDL2_mixer)
 
-add_executable(MeteourRunning src/main.cpp src/ObjLoader.cpp)
-target_link_libraries(MeteourRunning PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT)
+add_executable(MeteourRunning src/main.cpp src/ObjLoader.cpp src/Audio.cpp src/camera.cpp)
+target_link_libraries(MeteourRunning PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT PkgConfig::SDL2_MIXER)
 
 # Keep assets next to the executable, including with multi-config generators.
 add_custom_command(TARGET MeteourRunning POST_BUILD

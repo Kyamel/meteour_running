@@ -19,7 +19,7 @@
               in !(builtins.elem name [ "build" ".git" ".vscode" ".agents" ".aws" ".codex" ]);
           };
           nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ];
-          buildInputs = [ pkgs.freeglut pkgs.libGL pkgs.libGLU ];
+          buildInputs = [ pkgs.freeglut pkgs.libGL pkgs.libGLU pkgs.SDL2 pkgs.SDL2_mixer ];
           # OpenGL needs the host GPU driver at runtime.
           postFixup = ''
             patchelf --add-rpath /run/opengl-driver/lib $out/bin/MeteourRunning
@@ -40,7 +40,7 @@
       });
       devShells = forEachSystem (pkgs: {
         default = pkgs.mkShell {
-          packages = [ pkgs.cmake pkgs.pkg-config pkgs.gdb pkgs.freeglut pkgs.libGL pkgs.libGLU ];
+          packages = [ pkgs.cmake pkgs.pkg-config pkgs.gdb pkgs.clang-tools pkgs.freeglut pkgs.libGL pkgs.libGLU pkgs.SDL2 pkgs.SDL2_mixer ];
           # An impure shell may inherit -L/usr/lib, which links an older host
           # glibc instead of the one used by the Nix OpenGL dependencies.
           shellHook = ''

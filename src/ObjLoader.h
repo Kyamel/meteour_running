@@ -10,7 +10,7 @@
 #include <GL/freeglut.h>
 
 class ObjLoader {
-public:
+  public:
     bool load(const std::string& filename);
     void draw() const;
     void setTexture(GLuint texture); // Declaração do método setTexture
@@ -23,19 +23,16 @@ public:
     float currentSpeed = 0.01f;
     const float maxSpeed = 0.08f;
 
-private:
+  private:
     void processLine(const std::string& line);
     mutable GLuint displayList = 0;
-    
+
     std::vector<std::vector<GLfloat>> vertices;
     std::vector<std::vector<GLfloat>> normais;
     std::vector<std::vector<GLfloat>> texturas;
     std::vector<std::vector<std::vector<GLint>>> faces;
 
     GLuint texture = 0;
-
-
 };
-
 
 #endif // OBJ_DATA_H

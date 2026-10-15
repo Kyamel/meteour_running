@@ -12,7 +12,10 @@ bool ObjLoader::load(const std::string& filename) {
     normais.clear();
     texturas.clear();
     faces.clear();
-    if (displayList) { glDeleteLists(displayList, 1); displayList = 0; }
+    if (displayList) {
+        glDeleteLists(displayList, 1);
+        displayList = 0;
+    }
     std::string line;
     while (std::getline(file, line)) {
         processLine(line);
@@ -50,7 +53,6 @@ void ObjLoader::draw() const {
     glCallList(displayList);
     glDisable(GL_TEXTURE_2D);
 }
-
 
 // Método auxiliar para processar linhas do arquivo
 void ObjLoader::processLine(const std::string& line) {
@@ -92,6 +94,6 @@ void ObjLoader::processLine(const std::string& line) {
     }
 }
 
-void ObjLoader::setTexture(GLuint texture){
+void ObjLoader::setTexture(GLuint texture) {
     this->texture = texture;
 }

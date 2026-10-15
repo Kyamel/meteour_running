@@ -11,9 +11,12 @@
 #include <string>
 #include <vector>
 
+#include "Audio.h"
+#include "ObjLoader.h"
+#include "camera.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-#include "ObjLoader.h"
 
 namespace {
 constexpr float pi = 3.14159265f;
@@ -26,12 +29,21 @@ constexpr float carHalfWidth = 3.4f;
 constexpr float carHalfLength = 8.0f;
 constexpr float carHeight = 5.3f;
 
-struct Meteor { float x, y, z, radius, speed, spin; };
-struct Impact { float x, z, age; bool car; };
+struct Meteor {
+    float x, y, z, radius, speed, spin;
+};
+
+struct Impact {
+    float x, z, age;
+    bool car;
+};
+
 std::vector<Meteor> meteors;
 std::vector<Impact> impacts;
 std::mt19937 randomEngine(std::random_device{}());
 ObjLoader car;
+Audio audio;
+Camera camera;
 GLuint groundTexture = 0, skyTexture = 0, meteorTexture = 0;
 GLUquadric* sphere = nullptr;
 std::filesystem::path assetRoot;
@@ -71,15 +83,17 @@ GLuint createMeteorTexture() {
     // Tiled, deterministic mottled rock; no external meteor asset required.
     std::mt19937 rng(67);
     std::array<float, 16 * 16> noise{};
-    for (float& n : noise) n = std::uniform_real_distribution<float>(0, 1)(rng);
-    for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
-        const int coarse = noise[(y / 8) * 16 + x / 8] * 75;
-        const int fine = static_cast<int>(rng() % 38);
-        const int i = (y * size + x) * 3;
-        pixels[i] = static_cast<unsigned char>(85 + coarse + fine);
-        pixels[i + 1] = static_cast<unsigned char>(57 + coarse / 2 + fine / 2);
-        pixels[i + 2] = static_cast<unsigned char>(43 + coarse / 3 + fine / 3);
-    }
+    for (float& n : noise)
+        n = std::uniform_real_distribution<float>(0, 1)(rng);
+    for (int y = 0; y < size; ++y)
+        for (int x = 0; x < size; ++x) {
+            const int coarse = noise[(y / 8) * 16 + x / 8] * 75;
+            const int fine = static_cast<int>(rng() % 38);
+            const int i = (y * size + x) * 3;
+            pixels[i] = static_cast<unsigned char>(85 + coarse + fine);
+            pixels[i + 1] = static_cast<unsigned char>(57 + coarse / 2 + fine / 2);
+            pixels[i + 2] = static_cast<unsigned char>(43 + coarse / 3 + fine / 3);
+        }
     GLuint id;
     glGenTextures(1, &id);
     glBindTexture(GL_TEXTURE_2D, id);
@@ -110,8 +124,9 @@ bool touchesCar(const Meteor& m) {
     const float nearestX = std::clamp(localX, -carHalfWidth, carHalfWidth);
     const float nearestY = std::clamp(m.y, 0.0f, carHeight);
     const float nearestZ = std::clamp(localZ, -carHalfLength, carHalfLength);
-    const float distanceSquared = (localX-nearestX)*(localX-nearestX) +
-        (m.y-nearestY)*(m.y-nearestY) + (localZ-nearestZ)*(localZ-nearestZ);
+    const float distanceSquared = (localX - nearestX) * (localX - nearestX) +
+                                  (m.y - nearestY) * (m.y - nearestY) +
+                                  (localZ - nearestZ) * (localZ - nearestZ);
     return distanceSquared <= m.radius * m.radius;
 }
 
@@ -122,51 +137,78 @@ void restart() {
     hits = 0;
     gameOver = false;
     impacts.clear();
-    for (auto& m : meteors) resetMeteor(m, true);
+    for (auto& m : meteors)
+        resetMeteor(m, true);
+
     lastTick = glutGet(GLUT_ELAPSED_TIME);
 }
 
 void update(float dt) {
     flash = std::max(0.0f, flash - dt * 2.4f);
-    for (auto& impact : impacts) impact.age += dt;
+    for (auto& impact : impacts)
+        impact.age += dt;
     impacts.erase(std::remove_if(impacts.begin(), impacts.end(),
-        [](const Impact& i) { return i.age >= 0.75f; }), impacts.end());
-    if (gameOver) return;
+                                 [](const Impact& i) { return i.age >= 0.75f; }),
+                  impacts.end());
+
+    if (gameOver) {
+        audio.update(0, 0, dt, false);
+        return;
+    }
+
     survival += dt;
     invulnerability = std::max(0.0f, invulnerability - dt);
+
     const float drive = (keys['w'] ? 1.0f : 0.0f) - (keys['s'] ? 1.0f : 0.0f);
     const float target = drive * (drive < 0 ? reverseSpeed : forwardSpeed);
     velocity += (target - velocity) * std::min(1.0f, dt * (drive ? 4.0f : 2.5f));
     const float steering = (keys['a'] ? 1.0f : 0.0f) - (keys['d'] ? 1.0f : 0.0f);
     heading += steering * 110.0f * dt;
+
     const float angle = heading * pi / 180.0f;
     // Keep the rotated car on the same ground quad that drawGround renders.
-    const float halfX = std::abs(std::cos(angle)) * carHalfWidth +
-        std::abs(std::sin(angle)) * carHalfLength;
-    const float halfZ = std::abs(std::sin(angle)) * carHalfWidth +
-        std::abs(std::cos(angle)) * carHalfLength;
+    const float halfX =
+        std::abs(std::cos(angle)) * carHalfWidth + std::abs(std::sin(angle)) * carHalfLength;
+    const float halfZ =
+        std::abs(std::sin(angle)) * carHalfWidth + std::abs(std::cos(angle)) * carHalfLength;
     const float xLimit = groundHalfSize - halfX;
     const float zLimit = groundHalfSize - halfZ;
     car.x = std::clamp(car.x + std::sin(angle) * velocity * dt, -xLimit, xLimit);
     car.z = std::clamp(car.z + std::cos(angle) * velocity * dt, -zLimit, zLimit);
+
     for (auto& m : meteors) {
         m.y -= m.speed * dt;
         m.spin += 32.0f * dt;
         if (touchesCar(m)) {
             impacts.push_back({m.x, m.z, 0, true});
+            audio.carImpact();
             if (invulnerability == 0) {
                 health = std::max(0, health - 20);
                 ++hits;
                 flash = 0.7f;
                 invulnerability = 1.0f;
-                if (health == 0) gameOver = true;
+                if (health == 0) {
+                    gameOver = true;
+                    audio.gameOver();
+                }
             }
             resetMeteor(m);
         } else if (m.y <= m.radius) {
             impacts.push_back({m.x, m.z, 0, false});
+            audio.groundImpact(std::hypot(m.x - car.x, m.z - car.z));
             resetMeteor(m);
         }
     }
+
+    float meteorIntensity = 0;
+    for (const auto& m : meteors) {
+        const float horizontal = std::hypot(m.x - car.x, m.z - car.z);
+        const float nearness = std::max(0.0f, 1.0f - horizontal / 40.0f);
+        const float descent = std::max(0.0f, 1.0f - m.y / 100.0f);
+        meteorIntensity = std::max(meteorIntensity, nearness * descent);
+    }
+
+    audio.update(std::abs(velocity) / forwardSpeed, meteorIntensity, dt, !gameOver);
 }
 
 void drawGround() {
@@ -175,10 +217,14 @@ void drawGround() {
     glColor3f(0.76f, 0.79f, 0.72f);
     glNormal3f(0, 1, 0);
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0); glVertex3f(-groundHalfSize, -0.04f, -groundHalfSize);
-    glTexCoord2f(40, 0); glVertex3f(groundHalfSize, -0.04f, -groundHalfSize);
-    glTexCoord2f(40, 40); glVertex3f(groundHalfSize, -0.04f, groundHalfSize);
-    glTexCoord2f(0, 40); glVertex3f(-groundHalfSize, -0.04f, groundHalfSize);
+    glTexCoord2f(0, 0);
+    glVertex3f(-groundHalfSize, -0.04f, -groundHalfSize);
+    glTexCoord2f(40, 0);
+    glVertex3f(groundHalfSize, -0.04f, -groundHalfSize);
+    glTexCoord2f(40, 40);
+    glVertex3f(groundHalfSize, -0.04f, groundHalfSize);
+    glTexCoord2f(0, 40);
+    glVertex3f(-groundHalfSize, -0.04f, groundHalfSize);
     glEnd();
     glDisable(GL_TEXTURE_2D);
 }
@@ -214,6 +260,7 @@ void drawMeteors() {
         glDisable(GL_TEXTURE_2D);
         glPopMatrix();
     }
+
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -224,11 +271,12 @@ void drawMeteors() {
         glColor4f(1, 0.2f, 0.02f, 0);
         for (int i = 0; i <= 12; ++i) {
             const float a = i * 2 * pi / 12;
-            glVertex3f(m.x + std::cos(a) * m.radius * 0.8f,
-                m.y + m.radius * 4.5f, m.z + std::sin(a) * m.radius * 0.8f);
+            glVertex3f(m.x + std::cos(a) * m.radius * 0.8f, m.y + m.radius * 4.5f,
+                       m.z + std::sin(a) * m.radius * 0.8f);
         }
         glEnd();
     }
+
     for (const auto& impact : impacts) {
         const float t = impact.age / 0.75f;
         const float radius = (impact.car ? 2.0f : 0.8f) + t * 8.0f;
@@ -241,20 +289,24 @@ void drawMeteors() {
         }
         glEnd();
     }
+
     glDisable(GL_BLEND);
     glEnable(GL_LIGHTING);
 }
 
 void rectangle(float x, float y, float w, float h) {
     glBegin(GL_QUADS);
-    glVertex2f(x, y); glVertex2f(x + w, y);
-    glVertex2f(x + w, y + h); glVertex2f(x, y + h);
+    glVertex2f(x, y);
+    glVertex2f(x + w, y);
+    glVertex2f(x + w, y + h);
+    glVertex2f(x, y + h);
     glEnd();
 }
 
 void label(float x, float y, const std::string& value, void* font = GLUT_BITMAP_HELVETICA_18) {
     glRasterPos2f(x, y);
-    for (unsigned char c : value) glutBitmapCharacter(font, c);
+    for (unsigned char c : value)
+        glutBitmapCharacter(font, c);
 }
 
 void drawHud() {
@@ -271,6 +323,7 @@ void drawHud() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glColor4f(0.06f, 0.09f, 0.13f, 0.78f);
     rectangle(16, 16, 316, 84);
+
     glColor3f(1, 1, 1);
     char text[100];
     std::snprintf(text, sizeof(text), "VIDA  %d / %d", health, maxHealth);
@@ -279,14 +332,20 @@ void drawHud() {
     rectangle(30, 54, 286, 20);
     glColor3f(health > 40 ? 0.25f : 0.9f, health > 40 ? 0.78f : 0.26f, 0.23f);
     rectangle(30, 54, 286.0f * health / maxHealth, 20);
+
     glColor3f(1, 1, 1);
     std::snprintf(text, sizeof(text), "Tempo: %.0fs    Impactos: %d", survival, hits);
     label(30, 94, text, GLUT_BITMAP_HELVETICA_12);
-    label(22, height - 24, "W/S mover  |  A/D virar  |  R reiniciar  |  Q sair", GLUT_BITMAP_HELVETICA_12);
+    label(22, height - 24, "W/S mover  |  A/D virar  |  R reiniciar  |  M som  |  Q sair",
+          GLUT_BITMAP_HELVETICA_12);
+    if (audio.isMuted())
+        label(width - 105, 30, "SOM MUDO", GLUT_BITMAP_HELVETICA_12);
+
     if (flash > 0) {
         glColor4f(1, 0.08f, 0.02f, flash * 0.32f);
         rectangle(0, 0, width, height);
     }
+
     if (gameOver) {
         glColor4f(0.02f, 0.03f, 0.07f, 0.78f);
         rectangle(0, 0, width, height);
@@ -297,6 +356,7 @@ void drawHud() {
         label(width / 2.0f - 100, height / 2.0f + 12, text);
         label(width / 2.0f - 111, height / 2.0f + 46, "Pressione R para jogar novamente");
     }
+
     glDisable(GL_BLEND);
     glEnable(GL_LIGHTING);
     glEnable(GL_DEPTH_TEST);
@@ -310,14 +370,15 @@ void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    const float angle = heading * pi / 180.0f;
-    gluLookAt(car.x - std::sin(angle) * 23, 15, car.z - std::cos(angle) * 23,
-        car.x, 2.0f, car.z, 0, 1, 0);
+    camera.apply(car.x, car.z, heading);
+
     GLfloat sun[] = {-60, 90, 40, 0};
     glLightfv(GL_LIGHT0, GL_POSITION, sun);
+
     drawSky();
     drawGround();
     drawMeteors();
+
     if (invulnerability == 0 || static_cast<int>(invulnerability * 12) % 2 == 0) {
         glPushMatrix();
         glTranslatef(car.x, 0, car.z);
@@ -326,6 +387,7 @@ void display() {
         car.draw();
         glPopMatrix();
     }
+
     drawHud();
     glutSwapBuffers();
 }
@@ -333,19 +395,23 @@ void display() {
 void reshape(int w, int h) {
     width = std::max(1, w);
     height = std::max(1, h);
-    glViewport(0, 0, width, height);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(65, static_cast<double>(width) / height, 0.5, 500);
-    glMatrixMode(GL_MODELVIEW);
+    camera.reshape(width, height);
 }
 
 void keyDown(unsigned char key, int, int) {
-    if (key == 27 || key == 'q' || key == 'Q') std::exit(0);
-    if (key == 'r' || key == 'R') restart();
+    if (key == 27 || key == 'q' || key == 'Q')
+        std::exit(0);
+    if (key == 'r' || key == 'R')
+        restart();
+    if (key == 'm' || key == 'M')
+        audio.toggleMute();
+
     keys[static_cast<unsigned char>(std::tolower(key))] = true;
 }
-void keyUp(unsigned char key, int, int) { keys[static_cast<unsigned char>(std::tolower(key))] = false; }
+
+void keyUp(unsigned char key, int, int) {
+    keys[static_cast<unsigned char>(std::tolower(key))] = false;
+}
 
 void tick(int) {
     const int now = glutGet(GLUT_ELAPSED_TIME);
@@ -355,7 +421,7 @@ void tick(int) {
     glutPostRedisplay();
     glutTimerFunc(16, tick, 0);
 }
-}
+} // namespace
 
 int main(int argc, char** argv) {
     assetRoot = std::filesystem::absolute(argv[0]).parent_path();
@@ -363,6 +429,7 @@ int main(int argc, char** argv) {
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_DEPTH | GLUT_RGBA);
     glutInitWindowSize(width, height);
     glutCreateWindow("Meteour Running");
+
     glClearColor(0.31f, 0.49f, 0.7f, 1);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_LIGHTING);
@@ -372,21 +439,28 @@ int main(int argc, char** argv) {
     glEnable(GL_NORMALIZE);
     GLfloat ambient[] = {0.36f, 0.37f, 0.4f, 1};
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
+
     groundTexture = loadTexture(assetRoot / "assets/textura_piso.jpg", true);
     skyTexture = loadTexture(assetRoot / "assets/skybox.jpg", true);
     meteorTexture = createMeteorTexture();
     sphere = gluNewQuadric();
     gluQuadricTexture(sphere, GL_TRUE);
-    if (!car.load((assetRoot / "LowPolyCars.obj").string())) return 1;
+    if (!car.load((assetRoot / "LowPolyCars.obj").string()))
+        return 1;
+
     car.setTexture(loadTexture(assetRoot / "assets/Car Texture 1.png"));
+    audio.init(assetRoot);
+
     meteors.resize(meteorCount);
     restart();
+
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     glutKeyboardFunc(keyDown);
     glutKeyboardUpFunc(keyUp);
     glutIgnoreKeyRepeat(1);
     glutTimerFunc(16, tick, 0);
+
     glutMainLoop();
     gluDeleteQuadric(sphere);
     return 0;
