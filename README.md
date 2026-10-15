@@ -48,6 +48,6 @@ O projeto usa o pipeline clássico de OpenGL/FreeGLUT para fins didáticos. O ca
 
 ## Recursos e licença
 
-`src/stb_image.h` é uma biblioteca de terceiros (stb_image, v2.30; consulte o cabeçalho para as condições). A origem e as permissões de redistribuição de `LowPolyCars.obj` e das imagens em `assets/` ainda precisam ser confirmadas. **Nenhuma licença para o projeto ou esses recursos está declarada neste repositório.** Confirme a autoria/licença dos recursos antes de tornar o histórico público ou distribuir o jogo.
+`src/stb_image.h` é uma biblioteca de terceiros (stb_image, v2.30; consulte o cabeçalho para as condições). Segundo o autor do projeto, `LowPolyCars.obj` e as imagens em `assets/` vieram de um site de recursos gratuitos indicado na disciplina. O nome do site, os autores dos recursos e os termos de redistribuição não foram recuperados; por isso, não há atribuição ou licença específica declarada para eles. **Nenhuma licença para o projeto está declarada neste repositório.** Se a fonte original for encontrada, registre aqui o link, o autor e a licença de cada recurso.
 
 O arquivo `bonde.obj`, `assets/grama.bmp`, `assets/Car Texture 2.png` e arquivos antigos de `build/` pertencem ao histórico do projeto e não são usados na versão atual.
