@@ -24,7 +24,7 @@ constexpr float groundHalfSize = 200.0f;
 constexpr float forwardSpeed = 38.0f;
 constexpr float reverseSpeed = 18.0f;
 constexpr int maxHealth = 100;
-constexpr int meteorCount = 12;
+constexpr int meteorCount = 14;
 constexpr float carHalfWidth = 3.4f;
 constexpr float carHalfLength = 8.0f;
 constexpr float carHeight = 5.3f;
@@ -107,11 +107,20 @@ GLuint createMeteorTexture() {
 
 void resetMeteor(Meteor& m, bool initial = false) {
     m.radius = randomFloat(1.6f, 3.4f);
+    const float difficulty = std::min(survival / 90.0f, 1.0f);
+    m.y = randomFloat(initial ? 30.0f : 65.0f, initial ? 90.0f : 95.0f);
+    m.speed = randomFloat(52.0f, 68.0f) + difficulty * 18.0f;
+
+    // Aim most meteors at the car's projected path when they reach the ground.
+    const bool aimed = randomFloat(0.0f, 1.0f) < 0.55f;
+    const float angle = heading * pi / 180.0f;
+    const float leadTime = aimed ? std::min((m.y - m.radius) / m.speed, 1.5f) : 0.0f;
+    const float projectedX = car.x + std::sin(angle) * velocity * leadTime;
+    const float projectedZ = car.z + std::cos(angle) * velocity * leadTime;
+    const float scatter = aimed ? 22.0f : 34.0f;
     const float meteorLimit = groundHalfSize - m.radius;
-    m.x = std::clamp(car.x + randomFloat(-42, 42), -meteorLimit, meteorLimit);
-    m.z = std::clamp(car.z + randomFloat(-42, 42), -meteorLimit, meteorLimit);
-    m.y = randomFloat(initial ? 28.0f : 90.0f, initial ? 105.0f : 145.0f);
-    m.speed = randomFloat(24.0f, 40.0f);
+    m.x = std::clamp(projectedX + randomFloat(-scatter, scatter), -meteorLimit, meteorLimit);
+    m.z = std::clamp(projectedZ + randomFloat(-scatter, scatter), -meteorLimit, meteorLimit);
     m.spin = randomFloat(0, 360);
 }
 
@@ -264,6 +273,20 @@ void drawMeteors() {
     glDisable(GL_LIGHTING);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    for (const auto& m : meteors) {
+        const float warning = std::clamp(1.0f - m.y / 100.0f, 0.15f, 0.8f);
+        glColor4f(1.0f, 0.16f, 0.04f, warning);
+        glLineWidth(2.0f);
+        glBegin(GL_LINE_LOOP);
+        for (int i = 0; i < 24; ++i) {
+            const float a = i * 2 * pi / 24;
+            glVertex3f(m.x + std::cos(a) * (m.radius + 2.0f), 0.08f,
+                       m.z + std::sin(a) * (m.radius + 2.0f));
+        }
+        glEnd();
+    }
+
     for (const auto& m : meteors) {
         glBegin(GL_TRIANGLE_FAN);
         glColor4f(1, 0.42f, 0.1f, 0.55f);
